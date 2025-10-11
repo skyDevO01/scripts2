@@ -3,4 +3,8 @@ return {
         name = "Cut Trees 🌳",
         url="https://gist.githubusercontent.com/skyDevO01/ffe4c8f74000bfe39864223c49359356/raw/8b44aa283e7eb093a3ef7f202961ffde395afb5c/Cut%2520Trees%2520Simulator.Lua"
     },
+    [3956818381] = {
+        name = "⚡Ninja Legends",
+        url="https://gist.githubusercontent.com/skyDevO01/ec653155a3896e4d96edd984d557f57e/raw/47550c259e86811f78de3eb768f368e03c8fe919/Ninja%2520Legends.Lua"
+    }
 }
