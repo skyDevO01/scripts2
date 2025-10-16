@@ -67,6 +67,21 @@ UnknowHubGUI.Animations = {
     Fade = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 }
 
+-- Define Color3 constants to replace Color3.white, Color3.new, etc.
+local COLORS = {
+    WHITE = Color3.fromRGB(255, 255, 255),
+    BLACK = Color3.fromRGB(0, 0, 0),
+    RED = Color3.fromRGB(255, 60, 60),
+    GREEN = Color3.fromRGB(70, 150, 70),
+    DARK_BLUE = Color3.fromRGB(20, 20, 30),
+    MEDIUM_BLUE = Color3.fromRGB(30, 30, 45),
+    LIGHT_BLUE = Color3.fromRGB(50, 50, 80),
+    HOVER_BLUE = Color3.fromRGB(60, 60, 100),
+    SELECTED_BLUE = Color3.fromRGB(70, 70, 120),
+    GRAY = Color3.fromRGB(150, 150, 150),
+    LIGHT_GRAY = Color3.fromRGB(200, 200, 200)
+}
+
 function UnknowHubGUI.new()
     local self = setmetatable({}, UnknowHubGUI)
     
@@ -91,7 +106,7 @@ function UnknowHubGUI:CreateMainGUI()
     mainFrame.Size = UDim2.new(0, 450, 0, 500)
     mainFrame.Position = UDim2.new(0.5, -225, 0.5, -250)
     mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    mainFrame.BackgroundColor3 = COLORS.DARK_BLUE
     mainFrame.BackgroundTransparency = 0.1
     mainFrame.BorderSizePixel = 0
     
@@ -114,7 +129,7 @@ function UnknowHubGUI:CreateMainGUI()
     local header = Instance.new("Frame")
     header.Name = "Header"
     header.Size = UDim2.new(1, 0, 0, 50)
-    header.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    header.BackgroundColor3 = COLORS.MEDIUM_BLUE
     header.BackgroundTransparency = 0.1
     header.BorderSizePixel = 0
     header.Parent = mainFrame
@@ -129,7 +144,7 @@ function UnknowHubGUI:CreateMainGUI()
     title.Position = UDim2.new(0, 15, 0, 0)
     title.BackgroundTransparency = 1
     title.Text = "UnknowHub Emotes"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextColor3 = COLORS.WHITE  -- Fixed: Using defined constant
     title.TextSize = 18
     title.Font = Enum.Font.GothamBold
     title.TextXAlignment = Enum.TextXAlignment.Left
@@ -141,9 +156,9 @@ function UnknowHubGUI:CreateMainGUI()
     closeButton.Size = UDim2.new(0, 30, 0, 30)
     closeButton.Position = UDim2.new(1, -35, 0.5, -15)
     closeButton.AnchorPoint = Vector2.new(0.5, 0.5)
-    closeButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+    closeButton.BackgroundColor3 = COLORS.RED
     closeButton.Text = "X"
-    closeButton.TextColor3 = Color3.white
+    closeButton.TextColor3 = COLORS.WHITE  -- Fixed: Using defined constant
     closeButton.TextSize = 14
     closeButton.Font = Enum.Font.GothamBold
     closeButton.Parent = header
@@ -200,9 +215,9 @@ function UnknowHubGUI:CreateTabButton(text, isSelected)
     local button = Instance.new("TextButton")
     button.Name = text .. "Tab"
     button.Size = UDim2.new(0, 100, 1, 0)
-    button.BackgroundColor3 = isSelected and Color3.fromRGB(70, 70, 120) or Color3.fromRGB(50, 50, 80)
+    button.BackgroundColor3 = isSelected and COLORS.SELECTED_BLUE or COLORS.LIGHT_BLUE
     button.Text = text
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextColor3 = COLORS.WHITE
     button.TextSize = 14
     button.Font = Enum.Font.Gotham
     button.AutoButtonColor = false
@@ -215,7 +230,7 @@ function UnknowHubGUI:CreateTabButton(text, isSelected)
     button.MouseEnter:Connect(function()
         if not isSelected then
             local tween = TweenService:Create(button, self.Animations.ButtonHover, {
-                BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+                BackgroundColor3 = COLORS.HOVER_BLUE
             })
             tween:Play()
         end
@@ -224,7 +239,7 @@ function UnknowHubGUI:CreateTabButton(text, isSelected)
     button.MouseLeave:Connect(function()
         if not isSelected then
             local tween = TweenService:Create(button, self.Animations.ButtonHover, {
-                BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+                BackgroundColor3 = COLORS.LIGHT_BLUE
             })
             tween:Play()
         end
@@ -246,8 +261,8 @@ function UnknowHubGUI:CreateEmotesTab()
     searchBox.Position = UDim2.new(0, 0, 0, 0)
     searchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
     searchBox.PlaceholderText = "Search emotes..."
-    searchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-    searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    searchBox.PlaceholderColor3 = COLORS.GRAY
+    searchBox.TextColor3 = COLORS.WHITE
     searchBox.TextSize = 14
     searchBox.Font = Enum.Font.Gotham
     searchBox.ClearTextOnFocus = false
@@ -327,7 +342,7 @@ function UnknowHubGUI:LoadEmotes(scrollFrame)
         local emoteButton = Instance.new("TextButton")
         emoteButton.Name = "Emote_" .. emote.name
         emoteButton.Size = UDim2.new(1, 0, 0, 50)
-        emoteButton.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+        emoteButton.BackgroundColor3 = COLORS.LIGHT_BLUE
         emoteButton.Text = ""
         emoteButton.AutoButtonColor = false
         emoteButton.LayoutOrder = i
@@ -339,11 +354,11 @@ function UnknowHubGUI:LoadEmotes(scrollFrame)
         
         local emoteName = Instance.new("TextLabel")
         emoteName.Name = "EmoteName"
-        emoteName.Size = UDim2.new(0.6, 0, 1, 0)
-        emoteName.Position = UDim2.new(0, 15, 0, 0)
+        emoteName.Size = UDim2.new(0.6, 0, 0, 20)
+        emoteName.Position = UDim2.new(0, 15, 0, 5)
         emoteName.BackgroundTransparency = 1
         emoteName.Text = emote.name
-        emoteName.TextColor3 = Color3.fromRGB(255, 255, 255)
+        emoteName.TextColor3 = COLORS.WHITE
         emoteName.TextSize = 14
         emoteName.Font = Enum.Font.GothamBold
         emoteName.TextXAlignment = Enum.TextXAlignment.Left
@@ -351,30 +366,24 @@ function UnknowHubGUI:LoadEmotes(scrollFrame)
         
         local emoteId = Instance.new("TextLabel")
         emoteId.Name = "EmoteID"
-        emoteId.Size = UDim2.new(0.6, 0, 1, 0)
-        emoteId.Position = UDim2.new(0, 15, 0, 0)
+        emoteId.Size = UDim2.new(0.6, 0, 0, 15)
+        emoteId.Position = UDim2.new(0, 15, 0, 25)
         emoteId.BackgroundTransparency = 1
         emoteId.Text = "ID: " .. emote.id
-        emoteId.TextColor3 = Color3.fromRGB(200, 200, 200)
+        emoteId.TextColor3 = COLORS.LIGHT_GRAY
         emoteId.TextSize = 12
         emoteId.Font = Enum.Font.Gotham
         emoteId.TextXAlignment = Enum.TextXAlignment.Left
         emoteId.Parent = emoteButton
-        
-        -- Position the ID below the name
-        emoteName.Position = UDim2.new(0, 15, 0, 5)
-        emoteName.Size = UDim2.new(0.6, 0, 0, 20)
-        emoteId.Position = UDim2.new(0, 15, 0, 25)
-        emoteId.Size = UDim2.new(0.6, 0, 0, 15)
         
         local loadButton = Instance.new("TextButton")
         loadButton.Name = "LoadButton"
         loadButton.Size = UDim2.new(0, 80, 0, 30)
         loadButton.Position = UDim2.new(1, -90, 0.5, -15)
         loadButton.AnchorPoint = Vector2.new(0.5, 0.5)
-        loadButton.BackgroundColor3 = Color3.fromRGB(70, 150, 70)
+        loadButton.BackgroundColor3 = COLORS.GREEN
         loadButton.Text = "LOAD"
-        loadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        loadButton.TextColor3 = COLORS.WHITE
         loadButton.TextSize = 12
         loadButton.Font = Enum.Font.GothamBold
         loadButton.AutoButtonColor = false
@@ -393,14 +402,14 @@ function UnknowHubGUI:SetupButtonAnimations(emoteButton, loadButton, emote)
     -- Main button hover
     emoteButton.MouseEnter:Connect(function()
         local tween = TweenService:Create(emoteButton, self.Animations.ButtonHover, {
-            BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+            BackgroundColor3 = COLORS.HOVER_BLUE
         })
         tween:Play()
     end)
     
     emoteButton.MouseLeave:Connect(function()
         local tween = TweenService:Create(emoteButton, self.Animations.ButtonHover, {
-            BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+            BackgroundColor3 = COLORS.LIGHT_BLUE
         })
         tween:Play()
     end)
@@ -416,7 +425,7 @@ function UnknowHubGUI:SetupButtonAnimations(emoteButton, loadButton, emote)
     
     loadButton.MouseLeave:Connect(function()
         local tween = TweenService:Create(loadButton, self.Animations.ButtonHover, {
-            BackgroundColor3 = Color3.fromRGB(70, 150, 70),
+            BackgroundColor3 = COLORS.GREEN,
             Size = UDim2.new(0, 80, 0, 30)
         })
         tween:Play()
@@ -480,7 +489,7 @@ function UnknowHubGUI:CreateSettingsTab()
         settingFrame.Name = setting .. "Setting"
         settingFrame.Size = UDim2.new(1, 0, 0, 50)
         settingFrame.Position = UDim2.new(0, 0, 0, (i-1) * 55)
-        settingFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+        settingFrame.BackgroundColor3 = COLORS.LIGHT_BLUE
         settingFrame.BackgroundTransparency = 0
         settingFrame.Parent = frame
         
@@ -494,7 +503,7 @@ function UnknowHubGUI:CreateSettingsTab()
         label.Position = UDim2.new(0, 15, 0, 0)
         label.BackgroundTransparency = 1
         label.Text = setting
-        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextColor3 = COLORS.WHITE
         label.TextSize = 14
         label.Font = Enum.Font.Gotham
         label.TextXAlignment = Enum.TextXAlignment.Left
@@ -519,7 +528,7 @@ function UnknowHubGUI:CreateSettingsTab()
         toggleKnob.Size = UDim2.new(0, 16, 0, 16)
         toggleKnob.Position = UDim2.new(0, 2, 0.5, -8)
         toggleKnob.AnchorPoint = Vector2.new(0.5, 0.5)
-        toggleKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        toggleKnob.BackgroundColor3 = COLORS.WHITE
         toggleKnob.Parent = toggle
         
         local knobCorner = Instance.new("UICorner")
@@ -540,7 +549,7 @@ function UnknowHubGUI:SetupToggleAnimation(toggle, knob, settingName)
         isOn = not isOn
         
         local targetPosition = isOn and UDim2.new(1, -2, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
-        local targetColor = isOn and Color3.fromRGB(70, 150, 70) or Color3.fromRGB(80, 80, 80)
+        local targetColor = isOn and COLORS.GREEN or Color3.fromRGB(80, 80, 80)
         
         local tween1 = TweenService:Create(knob, self.Animations.ButtonHover, {
             Position = targetPosition
@@ -583,7 +592,7 @@ function UnknowHubGUI:CreateNotification(message)
     label.Position = UDim2.new(0, 10, 0, 10)
     label.BackgroundTransparency = 1
     label.Text = message
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextColor3 = COLORS.WHITE
     label.TextSize = 14
     label.Font = Enum.Font.Gotham
     label.TextWrapped = true
@@ -660,8 +669,8 @@ function UnknowHubGUI:SwitchTab(tabName, emotesTab, settingsTab)
     self.currentTab = tabName
     
     -- Update tab buttons
-    emotesTab.BackgroundColor3 = tabName == "Emotes" and Color3.fromRGB(70, 70, 120) or Color3.fromRGB(50, 50, 80)
-    settingsTab.BackgroundColor3 = tabName == "Settings" and Color3.fromRGB(70, 70, 120) or Color3.fromRGB(50, 50, 80)
+    emotesTab.BackgroundColor3 = tabName == "Emotes" and COLORS.SELECTED_BLUE or COLORS.LIGHT_BLUE
+    settingsTab.BackgroundColor3 = tabName == "Settings" and COLORS.SELECTED_BLUE or COLORS.LIGHT_BLUE
     
     -- Slide animation
     if tabName == "Emotes" then
