@@ -73,13 +73,16 @@ local COLORS = {
     BLACK = Color3.fromRGB(0, 0, 0),
     RED = Color3.fromRGB(255, 60, 60),
     GREEN = Color3.fromRGB(70, 150, 70),
+    DARK_GREEN = Color3.fromRGB(50, 120, 50),
+    BRIGHT_GREEN = Color3.fromRGB(90, 180, 90),
     DARK_BLUE = Color3.fromRGB(20, 20, 30),
     MEDIUM_BLUE = Color3.fromRGB(30, 30, 45),
     LIGHT_BLUE = Color3.fromRGB(50, 50, 80),
     HOVER_BLUE = Color3.fromRGB(60, 60, 100),
     SELECTED_BLUE = Color3.fromRGB(70, 70, 120),
     GRAY = Color3.fromRGB(150, 150, 150),
-    LIGHT_GRAY = Color3.fromRGB(200, 200, 200)
+    LIGHT_GRAY = Color3.fromRGB(200, 200, 200),
+    DARK_GRAY = Color3.fromRGB(40, 40, 60)
 }
 
 function UnknowHubGUI.new()
@@ -89,6 +92,10 @@ function UnknowHubGUI.new()
     self.currentTab = "Emotes"
     self.emotes = {}
     self.settings = {}
+    self.autoRefreshEnabled = false
+    self.refreshConnection = nil
+    self.lastRefreshTime = 0
+    self.refreshCooldown = 2 -- seconds between auto-refreshes
     
     return self
 end
@@ -103,8 +110,8 @@ function UnknowHubGUI:CreateMainGUI()
     -- Main container with glass morphism effect
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 450, 0, 500)
-    mainFrame.Position = UDim2.new(0.5, -225, 0.5, -250)
+    mainFrame.Size = UDim2.new(0, 500, 0, 600) -- Increased size for better fit
+    mainFrame.Position = UDim2.new(0.5, -250, 0.5, -300)
     mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     mainFrame.BackgroundColor3 = COLORS.DARK_BLUE
     mainFrame.BackgroundTransparency = 0.1
@@ -144,7 +151,7 @@ function UnknowHubGUI:CreateMainGUI()
     title.Position = UDim2.new(0, 15, 0, 0)
     title.BackgroundTransparency = 1
     title.Text = "UnknowHub Emotes"
-    title.TextColor3 = COLORS.WHITE  -- Fixed: Using defined constant
+    title.TextColor3 = COLORS.WHITE
     title.TextSize = 18
     title.Font = Enum.Font.GothamBold
     title.TextXAlignment = Enum.TextXAlignment.Left
@@ -158,7 +165,7 @@ function UnknowHubGUI:CreateMainGUI()
     closeButton.AnchorPoint = Vector2.new(0.5, 0.5)
     closeButton.BackgroundColor3 = COLORS.RED
     closeButton.Text = "X"
-    closeButton.TextColor3 = COLORS.WHITE  -- Fixed: Using defined constant
+    closeButton.TextColor3 = COLORS.WHITE
     closeButton.TextSize = 14
     closeButton.Font = Enum.Font.GothamBold
     closeButton.Parent = header
@@ -254,19 +261,27 @@ function UnknowHubGUI:CreateEmotesTab()
     frame.Size = UDim2.new(1, 0, 1, 0)
     frame.BackgroundTransparency = 1
     
+    -- Top controls container
+    local controlsFrame = Instance.new("Frame")
+    controlsFrame.Name = "ControlsFrame"
+    controlsFrame.Size = UDim2.new(1, 0, 0, 80)
+    controlsFrame.Position = UDim2.new(0, 0, 0, 0)
+    controlsFrame.BackgroundTransparency = 1
+    controlsFrame.Parent = frame
+    
     -- Search box
     local searchBox = Instance.new("TextBox")
     searchBox.Name = "SearchBox"
     searchBox.Size = UDim2.new(1, 0, 0, 35)
     searchBox.Position = UDim2.new(0, 0, 0, 0)
-    searchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+    searchBox.BackgroundColor3 = COLORS.DARK_GRAY
     searchBox.PlaceholderText = "Search emotes..."
     searchBox.PlaceholderColor3 = COLORS.GRAY
     searchBox.TextColor3 = COLORS.WHITE
     searchBox.TextSize = 14
     searchBox.Font = Enum.Font.Gotham
     searchBox.ClearTextOnFocus = false
-    searchBox.Parent = frame
+    searchBox.Parent = controlsFrame
     
     local searchCorner = Instance.new("UICorner")
     searchCorner.CornerRadius = UDim.new(0, 8)
@@ -276,13 +291,84 @@ function UnknowHubGUI:CreateEmotesTab()
     searchPadding.PaddingLeft = UDim.new(0, 10)
     searchPadding.Parent = searchBox
     
+    -- Refresh button container
+    local refreshContainer = Instance.new("Frame")
+    refreshContainer.Name = "RefreshContainer"
+    refreshContainer.Size = UDim2.new(1, 0, 0, 35)
+    refreshContainer.Position = UDim2.new(0, 0, 0, 45)
+    refreshContainer.BackgroundTransparency = 1
+    refreshContainer.Parent = controlsFrame
+    
+    -- Manual refresh button
+    local refreshButton = Instance.new("TextButton")
+    refreshButton.Name = "RefreshButton"
+    refreshButton.Size = UDim2.new(0, 120, 1, 0)
+    refreshButton.Position = UDim2.new(0, 0, 0, 0)
+    refreshButton.BackgroundColor3 = COLORS.LIGHT_BLUE
+    refreshButton.Text = "🔄 Refresh"
+    refreshButton.TextColor3 = COLORS.WHITE
+    refreshButton.TextSize = 14
+    refreshButton.Font = Enum.Font.Gotham
+    refreshButton.AutoButtonColor = false
+    refreshButton.Parent = refreshContainer
+    
+    local refreshCorner = Instance.new("UICorner")
+    refreshCorner.CornerRadius = UDim.new(0, 8)
+    refreshCorner.Parent = refreshButton
+    
+    -- Auto-refresh toggle
+    local autoRefreshFrame = Instance.new("Frame")
+    autoRefreshFrame.Name = "AutoRefreshFrame"
+    autoRefreshFrame.Size = UDim2.new(0, 180, 1, 0)
+    autoRefreshFrame.Position = UDim2.new(1, -180, 0, 0)
+    autoRefreshFrame.BackgroundTransparency = 1
+    autoRefreshFrame.Parent = refreshContainer
+    
+    local autoRefreshLabel = Instance.new("TextLabel")
+    autoRefreshLabel.Name = "AutoRefreshLabel"
+    autoRefreshLabel.Size = UDim2.new(0, 120, 1, 0)
+    autoRefreshLabel.Position = UDim2.new(0, 0, 0, 0)
+    autoRefreshLabel.BackgroundTransparency = 1
+    autoRefreshLabel.Text = "Auto Refresh:"
+    autoRefreshLabel.TextColor3 = COLORS.WHITE
+    autoRefreshLabel.TextSize = 14
+    autoRefreshLabel.Font = Enum.Font.Gotham
+    autoRefreshLabel.TextXAlignment = Enum.TextXAlignment.Left
+    autoRefreshLabel.Parent = autoRefreshFrame
+    
+    local autoRefreshToggle = Instance.new("TextButton")
+    autoRefreshToggle.Name = "AutoRefreshToggle"
+    autoRefreshToggle.Size = UDim2.new(0, 40, 0, 20)
+    autoRefreshToggle.Position = UDim2.new(1, -40, 0.5, -10)
+    autoRefreshToggle.AnchorPoint = Vector2.new(0.5, 0.5)
+    autoRefreshToggle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    autoRefreshToggle.Text = ""
+    autoRefreshToggle.AutoButtonColor = false
+    autoRefreshToggle.Parent = autoRefreshFrame
+    
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(1, 0)
+    toggleCorner.Parent = autoRefreshToggle
+    
+    local toggleKnob = Instance.new("Frame")
+    toggleKnob.Name = "Knob"
+    toggleKnob.Size = UDim2.new(0, 16, 0, 16)
+    toggleKnob.Position = UDim2.new(0, 2, 0.5, -8)
+    toggleKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+    toggleKnob.BackgroundColor3 = COLORS.WHITE
+    toggleKnob.Parent = autoRefreshToggle
+    
+    local knobCorner = Instance.new("UICorner")
+    knobCorner.CornerRadius = UDim.new(1, 0)
+    knobCorner.Parent = toggleKnob
+    
     -- Emotes scroll frame
     local scrollFrame = Instance.new("ScrollingFrame")
     scrollFrame.Name = "EmotesScroll"
-    scrollFrame.Size = UDim2.new(1, 0, 1, -45)
-    scrollFrame.Position = UDim2.new(0, 0, 0, 45)
+    scrollFrame.Size = UDim2.new(1, 0, 1, -85) -- Adjusted for controls
+    scrollFrame.Position = UDim2.new(0, 0, 0, 85)
     scrollFrame.BackgroundTransparency = 1
-    scrollFrame.ScrollBarThickness = 4
+    scrollFrame.ScrollBarThickness = 6
     scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 150)
     scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -293,14 +379,135 @@ function UnknowHubGUI:CreateEmotesTab()
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = scrollFrame
     
-    -- Load emotes
+    local padding = Instance.new("UIPadding")
+    padding.PaddingRight = UDim.new(0, 5)
+    padding.Parent = scrollFrame
+    
+    -- Setup refresh functionality
+    self:SetupRefreshFunctionality(refreshButton, autoRefreshToggle, toggleKnob, scrollFrame)
+    
+    -- Load emotes initially
     self:LoadEmotes(scrollFrame)
+    
+    -- Setup search functionality
+    self:SetupSearchFunctionality(searchBox, scrollFrame)
     
     return frame
 end
 
+function UnknowHubGUI:SetupRefreshFunctionality(refreshButton, autoToggle, toggleKnob, scrollFrame)
+    -- Manual refresh button animations
+    refreshButton.MouseEnter:Connect(function()
+        local tween = TweenService:Create(refreshButton, self.Animations.ButtonHover, {
+            BackgroundColor3 = COLORS.HOVER_BLUE
+        })
+        tween:Play()
+    end)
+    
+    refreshButton.MouseLeave:Connect(function()
+        local tween = TweenService:Create(refreshButton, self.Animations.ButtonHover, {
+            BackgroundColor3 = COLORS.LIGHT_BLUE
+        })
+        tween:Play()
+    end)
+    
+    refreshButton.MouseButton1Click:Connect(function()
+        -- Click animation
+        local tween = TweenService:Create(refreshButton, self.Animations.ButtonClick, {
+            BackgroundColor3 = COLORS.SELECTED_BLUE
+        })
+        tween:Play()
+        
+        -- Refresh emotes
+        self:LoadEmotes(scrollFrame)
+        
+        -- Reset button color after animation
+        delay(0.1, function()
+            if refreshButton then
+                local tween2 = TweenService:Create(refreshButton, self.Animations.ButtonHover, {
+                    BackgroundColor3 = COLORS.LIGHT_BLUE
+                })
+                tween2:Play()
+            end
+        end)
+    end)
+    
+    -- Auto-refresh toggle functionality
+    autoToggle.MouseButton1Click:Connect(function()
+        self.autoRefreshEnabled = not self.autoRefreshEnabled
+        
+        local targetPosition = self.autoRefreshEnabled and UDim2.new(1, -2, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        local targetColor = self.autoRefreshEnabled and COLORS.GREEN or Color3.fromRGB(80, 80, 80)
+        
+        local tween1 = TweenService:Create(toggleKnob, self.Animations.ButtonHover, {
+            Position = targetPosition
+        })
+        
+        local tween2 = TweenService:Create(autoToggle, self.Animations.ButtonHover, {
+            BackgroundColor3 = targetColor
+        })
+        
+        tween1:Play()
+        tween2:Play()
+        
+        -- Start or stop auto-refresh
+        self:ToggleAutoRefresh(scrollFrame)
+    end)
+end
+
+function UnknowHubGUI:ToggleAutoRefresh(scrollFrame)
+    if self.autoRefreshEnabled then
+        -- Start auto-refresh
+        self:CreateNotification("Auto-refresh enabled")
+        
+        if self.refreshConnection then
+            self.refreshConnection:Disconnect()
+        end
+        
+        self.refreshConnection = RunService.Heartbeat:Connect(function()
+            local currentTime = os.time()
+            if currentTime - self.lastRefreshTime >= self.refreshCooldown then
+                self.lastRefreshTime = currentTime
+                self:LoadEmotes(scrollFrame)
+            end
+        end)
+    else
+        -- Stop auto-refresh
+        if self.refreshConnection then
+            self.refreshConnection:Disconnect()
+            self.refreshConnection = nil
+        end
+        self:CreateNotification("Auto-refresh disabled")
+    end
+end
+
+function UnknowHubGUI:SetupSearchFunctionality(searchBox, scrollFrame)
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        self:FilterEmotes(searchBox.Text, scrollFrame)
+    end)
+end
+
+function UnknowHubGUI:FilterEmotes(searchText, scrollFrame)
+    for _, child in ipairs(scrollFrame:GetChildren()) do
+        if child:IsA("TextButton") and child.Name:match("Emote_") then
+            local emoteName = child:FindFirstChild("EmoteName")
+            if emoteName then
+                local name = emoteName.Text:lower()
+                local search = searchText:lower()
+                
+                if search == "" or name:find(search, 1, true) then
+                    child.Visible = true
+                else
+                    child.Visible = false
+                end
+            end
+        end
+    end
+end
+
 function UnknowHubGUI:LoadEmotes(scrollFrame)
     if not isfolder(emotesFolder) then
+        self:CreateNotification("Emotes folder not found")
         return
     end
     
@@ -320,6 +527,7 @@ function UnknowHubGUI:LoadEmotes(scrollFrame)
     
     if not success then
         warn("Failed to read emotes folder: " .. tostring(files))
+        self:CreateNotification("Failed to load emotes")
         return
     end
     
@@ -341,7 +549,7 @@ function UnknowHubGUI:LoadEmotes(scrollFrame)
     for i, emote in ipairs(self.emotes) do
         local emoteButton = Instance.new("TextButton")
         emoteButton.Name = "Emote_" .. emote.name
-        emoteButton.Size = UDim2.new(1, 0, 0, 50)
+        emoteButton.Size = UDim2.new(1, -5, 0, 60) -- Adjusted for better fit
         emoteButton.BackgroundColor3 = COLORS.LIGHT_BLUE
         emoteButton.Text = ""
         emoteButton.AutoButtonColor = false
@@ -352,34 +560,44 @@ function UnknowHubGUI:LoadEmotes(scrollFrame)
         corner.CornerRadius = UDim.new(0, 8)
         corner.Parent = emoteButton
         
+        -- Emote info container
+        local infoContainer = Instance.new("Frame")
+        infoContainer.Name = "InfoContainer"
+        infoContainer.Size = UDim2.new(0.7, 0, 1, 0)
+        infoContainer.Position = UDim2.new(0, 0, 0, 0)
+        infoContainer.BackgroundTransparency = 1
+        infoContainer.Parent = emoteButton
+        
         local emoteName = Instance.new("TextLabel")
         emoteName.Name = "EmoteName"
-        emoteName.Size = UDim2.new(0.6, 0, 0, 20)
-        emoteName.Position = UDim2.new(0, 15, 0, 5)
+        emoteName.Size = UDim2.new(1, -10, 0, 25)
+        emoteName.Position = UDim2.new(0, 10, 0, 5)
         emoteName.BackgroundTransparency = 1
         emoteName.Text = emote.name
         emoteName.TextColor3 = COLORS.WHITE
         emoteName.TextSize = 14
         emoteName.Font = Enum.Font.GothamBold
         emoteName.TextXAlignment = Enum.TextXAlignment.Left
-        emoteName.Parent = emoteButton
+        emoteName.TextTruncate = Enum.TextTruncate.AtEnd
+        emoteName.Parent = infoContainer
         
         local emoteId = Instance.new("TextLabel")
         emoteId.Name = "EmoteID"
-        emoteId.Size = UDim2.new(0.6, 0, 0, 15)
-        emoteId.Position = UDim2.new(0, 15, 0, 25)
+        emoteId.Size = UDim2.new(1, -10, 0, 20)
+        emoteId.Position = UDim2.new(0, 10, 0, 30)
         emoteId.BackgroundTransparency = 1
-        emoteId.Text = "ID: " .. emote.id
+        emoteId.Text = "ID: " .. (emote.id:len() > 20 and emote.id:sub(1, 20) .. "..." or emote.id)
         emoteId.TextColor3 = COLORS.LIGHT_GRAY
         emoteId.TextSize = 12
         emoteId.Font = Enum.Font.Gotham
         emoteId.TextXAlignment = Enum.TextXAlignment.Left
-        emoteId.Parent = emoteButton
+        emoteId.TextTruncate = Enum.TextTruncate.AtEnd
+        emoteId.Parent = infoContainer
         
         local loadButton = Instance.new("TextButton")
         loadButton.Name = "LoadButton"
-        loadButton.Size = UDim2.new(0, 80, 0, 30)
-        loadButton.Position = UDim2.new(1, -90, 0.5, -15)
+        loadButton.Size = UDim2.new(0, 80, 0, 35) -- Better size
+        loadButton.Position = UDim2.new(1, -85, 0.5, -17.5)
         loadButton.AnchorPoint = Vector2.new(0.5, 0.5)
         loadButton.BackgroundColor3 = COLORS.GREEN
         loadButton.Text = "LOAD"
@@ -395,6 +613,11 @@ function UnknowHubGUI:LoadEmotes(scrollFrame)
         
         -- Animations
         self:SetupButtonAnimations(emoteButton, loadButton, emote)
+    end
+    
+    -- Update notification if auto-refresh is enabled
+    if self.autoRefreshEnabled then
+        self:CreateNotification("Emotes refreshed (" .. #self.emotes .. " found)")
     end
 end
 
@@ -417,8 +640,8 @@ function UnknowHubGUI:SetupButtonAnimations(emoteButton, loadButton, emote)
     -- Load button animations
     loadButton.MouseEnter:Connect(function()
         local tween = TweenService:Create(loadButton, self.Animations.ButtonHover, {
-            BackgroundColor3 = Color3.fromRGB(90, 180, 90),
-            Size = UDim2.new(0, 85, 0, 32)
+            BackgroundColor3 = COLORS.BRIGHT_GREEN,
+            Size = UDim2.new(0, 85, 0, 38)
         })
         tween:Play()
     end)
@@ -426,23 +649,23 @@ function UnknowHubGUI:SetupButtonAnimations(emoteButton, loadButton, emote)
     loadButton.MouseLeave:Connect(function()
         local tween = TweenService:Create(loadButton, self.Animations.ButtonHover, {
             BackgroundColor3 = COLORS.GREEN,
-            Size = UDim2.new(0, 80, 0, 30)
+            Size = UDim2.new(0, 80, 0, 35)
         })
         tween:Play()
     end)
     
     loadButton.MouseButton1Down:Connect(function()
         local tween = TweenService:Create(loadButton, self.Animations.ButtonClick, {
-            BackgroundColor3 = Color3.fromRGB(50, 120, 50),
-            Size = UDim2.new(0, 75, 0, 28)
+            BackgroundColor3 = COLORS.DARK_GREEN,
+            Size = UDim2.new(0, 75, 0, 32)
         })
         tween:Play()
     end)
     
     loadButton.MouseButton1Up:Connect(function()
         local tween = TweenService:Create(loadButton, self.Animations.ButtonHover, {
-            BackgroundColor3 = Color3.fromRGB(90, 180, 90),
-            Size = UDim2.new(0, 85, 0, 32)
+            BackgroundColor3 = COLORS.BRIGHT_GREEN,
+            Size = UDim2.new(0, 85, 0, 38)
         })
         tween:Play()
         
@@ -464,7 +687,7 @@ function UnknowHubGUI:LoadEmote(emote)
     
     -- Auto-remove notification after 2 seconds
     delay(2, function()
-        if notification then
+        if notification and notification.Parent then
             notification:Destroy()
         end
     end)
@@ -476,22 +699,46 @@ function UnknowHubGUI:CreateSettingsTab()
     frame.Size = UDim2.new(1, 0, 1, 0)
     frame.BackgroundTransparency = 1
     
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Name = "SettingsScroll"
+    scrollFrame.Size = UDim2.new(1, 0, 1, 0)
+    scrollFrame.Position = UDim2.new(0, 0, 0, 0)
+    scrollFrame.BackgroundTransparency = 1
+    scrollFrame.ScrollBarThickness = 6
+    scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 150)
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scrollFrame.Parent = frame
+    
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 10)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = scrollFrame
+    
+    local padding = Instance.new("UIPadding")
+    padding.PaddingTop = UDim.new(0, 5)
+    padding.PaddingRight = UDim.new(0, 5)
+    padding.Parent = scrollFrame
+    
     local settings = {
         "Auto-load on join",
-        "Show emote notifications",
+        "Show emote notifications", 
         "Enable sound effects",
         "Dark mode",
-        "Compact view"
+        "Compact view",
+        "Confirm before loading",
+        "Show emote IDs",
+        "Auto-close after load"
     }
     
     for i, setting in ipairs(settings) do
         local settingFrame = Instance.new("Frame")
         settingFrame.Name = setting .. "Setting"
         settingFrame.Size = UDim2.new(1, 0, 0, 50)
-        settingFrame.Position = UDim2.new(0, 0, 0, (i-1) * 55)
         settingFrame.BackgroundColor3 = COLORS.LIGHT_BLUE
         settingFrame.BackgroundTransparency = 0
-        settingFrame.Parent = frame
+        settingFrame.LayoutOrder = i
+        settingFrame.Parent = scrollFrame
         
         local corner = Instance.new("UICorner")
         corner.CornerRadius = UDim.new(0, 8)
@@ -565,6 +812,11 @@ function UnknowHubGUI:SetupToggleAnimation(toggle, knob, settingName)
         -- Save setting
         self.settings[settingName] = isOn
         print("Setting '" .. settingName .. "' set to: " .. tostring(isOn))
+        
+        -- Special handling for auto-refresh
+        if settingName == "Auto-load on join" then
+            self:CreateNotification(isOn and "Auto-load enabled" or "Auto-load disabled")
+        end
     end)
 end
 
@@ -574,7 +826,7 @@ function UnknowHubGUI:CreateNotification(message)
     notification.Size = UDim2.new(0, 300, 0, 60)
     notification.Position = UDim2.new(0.5, -150, 1, -80)
     notification.AnchorPoint = Vector2.new(0.5, 0.5)
-    notification.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+    notification.BackgroundColor3 = COLORS.DARK_GRAY
     notification.BackgroundTransparency = 0.1
     
     local corner = Instance.new("UICorner")
@@ -695,6 +947,12 @@ function UnknowHubGUI:SwitchTab(tabName, emotesTab, settingsTab)
 end
 
 function UnknowHubGUI:CloseGUI()
+    -- Stop auto-refresh if running
+    if self.refreshConnection then
+        self.refreshConnection:Disconnect()
+        self.refreshConnection = nil
+    end
+    
     if self.gui then
         -- Fade out animation
         local tween = TweenService:Create(self.gui.MainFrame, self.Animations.Fade, {
@@ -721,7 +979,7 @@ function UnknowHubGUI:ToggleGUI()
         self.gui.MainFrame.BackgroundTransparency = 1
         
         local tween = TweenService:Create(self.gui.MainFrame, self.Animations.PanelSlide, {
-            Size = UDim2.new(0, 450, 0, 500),
+            Size = UDim2.new(0, 500, 0, 600),
             BackgroundTransparency = 0.1
         })
         tween:Play()
