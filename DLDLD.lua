@@ -1,0 +1,723 @@
+-- UnknowHub Emotes GUI Library
+local UnknowHubGUI = {}
+UnknowHubGUI.__index = UnknowHubGUI
+
+-- Configuration
+local folder = "@unknowHubEmotes"
+local emotesFolder = folder .. "/emotes"
+
+-- Utility functions (your existing code)
+local function normalizePath(p)
+    p = p:gsub("\\", "/")
+    p = p:gsub("/+", "/")
+    if #p > 1 then
+        p = p:gsub("/$", "")
+    end
+    return p
+end
+
+local function ensureFolder(path)
+    path = normalizePath(path)
+
+    if type(isfolder) == "function" then
+        if not isfolder(path) then
+            local ok, err = pcall(makefolder, path)
+            if ok then
+                print("Created folder:", path)
+                return true
+            else
+                warn("Failed to create folder (" .. path .. "): " .. tostring(err))
+                return false
+            end
+        else
+            return false
+        end
+    end
+
+    local ok, err = pcall(makefolder, path)
+    if ok then
+        print("Created folder (fallback):", path)
+        return true
+    else
+        warn("makefolder failed (fallback) for '" .. path .. "': " .. tostring(err))
+        return false
+    end
+end
+
+-- Initialize folders
+ensureFolder(folder)
+ensureFolder(emotesFolder)
+
+if isfolder(emotesFolder) and not isfile(emotesFolder .. "/Emote1.txt") then
+    writefile(emotesFolder .. "/Emote1.txt", "1234567890")
+    print("Created Emote1.txt")
+end
+
+-- Tween service for animations
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- Animation presets
+UnknowHubGUI.Animations = {
+    ButtonHover = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    ButtonClick = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    TabSwitch = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    PanelSlide = TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    Fade = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+}
+
+function UnknowHubGUI.new()
+    local self = setmetatable({}, UnknowHubGUI)
+    
+    self.gui = nil
+    self.currentTab = "Emotes"
+    self.emotes = {}
+    self.settings = {}
+    
+    return self
+end
+
+function UnknowHubGUI:CreateMainGUI()
+    -- Create main ScreenGui
+    self.gui = Instance.new("ScreenGui")
+    self.gui.Name = "UnknowHubEmotesGUI"
+    self.gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    self.gui.ResetOnSpawn = false
+
+    -- Main container with glass morphism effect
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 450, 0, 500)
+    mainFrame.Position = UDim2.new(0.5, -225, 0.5, -250)
+    mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    mainFrame.BackgroundTransparency = 0.1
+    mainFrame.BorderSizePixel = 0
+    
+    -- Apply glass effect
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0, 12)
+    uiCorner.Parent = mainFrame
+    
+    local uiStroke = Instance.new("UIStroke")
+    uiStroke.Color = Color3.fromRGB(100, 100, 150)
+    uiStroke.Thickness = 1
+    uiStroke.Transparency = 0.7
+    uiStroke.Parent = mainFrame
+    
+    local backgroundBlur = Instance.new("BlurEffect")
+    backgroundBlur.Size = 8
+    backgroundBlur.Parent = self.gui
+
+    -- Header
+    local header = Instance.new("Frame")
+    header.Name = "Header"
+    header.Size = UDim2.new(1, 0, 0, 50)
+    header.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    header.BackgroundTransparency = 0.1
+    header.BorderSizePixel = 0
+    header.Parent = mainFrame
+    
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 12)
+    headerCorner.Parent = header
+    
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Size = UDim2.new(0, 200, 1, 0)
+    title.Position = UDim2.new(0, 15, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "UnknowHub Emotes"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextSize = 18
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = header
+    
+    -- Close button
+    local closeButton = Instance.new("TextButton")
+    closeButton.Name = "CloseButton"
+    closeButton.Size = UDim2.new(0, 30, 0, 30)
+    closeButton.Position = UDim2.new(1, -35, 0.5, -15)
+    closeButton.AnchorPoint = Vector2.new(0.5, 0.5)
+    closeButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+    closeButton.Text = "X"
+    closeButton.TextColor3 = Color3.white
+    closeButton.TextSize = 14
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.Parent = header
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(1, 0)
+    closeCorner.Parent = closeButton
+
+    -- Tab buttons container
+    local tabContainer = Instance.new("Frame")
+    tabContainer.Name = "TabContainer"
+    tabContainer.Size = UDim2.new(1, -30, 0, 40)
+    tabContainer.Position = UDim2.new(0, 15, 0, 60)
+    tabContainer.BackgroundTransparency = 1
+    tabContainer.Parent = mainFrame
+    
+    -- Tab buttons
+    local emotesTab = self:CreateTabButton("Emotes", true)
+    emotesTab.Position = UDim2.new(0, 0, 0, 0)
+    emotesTab.Parent = tabContainer
+    
+    local settingsTab = self:CreateTabButton("Settings", false)
+    settingsTab.Position = UDim2.new(0, 120, 0, 0)
+    settingsTab.Parent = tabContainer
+
+    -- Content area
+    local contentFrame = Instance.new("Frame")
+    contentFrame.Name = "ContentFrame"
+    contentFrame.Size = UDim2.new(1, -30, 1, -120)
+    contentFrame.Position = UDim2.new(0, 15, 0, 110)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.ClipsDescendants = true
+    contentFrame.Parent = mainFrame
+
+    -- Create tab contents
+    self.emotesContent = self:CreateEmotesTab()
+    self.emotesContent.Parent = contentFrame
+    
+    self.settingsContent = self:CreateSettingsTab()
+    self.settingsContent.Position = UDim2.new(1, 0, 0, 0)
+    self.settingsContent.Parent = contentFrame
+
+    -- Make draggable
+    self:MakeDraggable(header, mainFrame)
+
+    -- Connect events
+    self:ConnectEvents(emotesTab, settingsTab, closeButton)
+
+    mainFrame.Parent = self.gui
+    return self.gui
+end
+
+function UnknowHubGUI:CreateTabButton(text, isSelected)
+    local button = Instance.new("TextButton")
+    button.Name = text .. "Tab"
+    button.Size = UDim2.new(0, 100, 1, 0)
+    button.BackgroundColor3 = isSelected and Color3.fromRGB(70, 70, 120) or Color3.fromRGB(50, 50, 80)
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = 14
+    button.Font = Enum.Font.Gotham
+    button.AutoButtonColor = false
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = button
+    
+    -- Hover animation
+    button.MouseEnter:Connect(function()
+        if not isSelected then
+            local tween = TweenService:Create(button, self.Animations.ButtonHover, {
+                BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+            })
+            tween:Play()
+        end
+    end)
+    
+    button.MouseLeave:Connect(function()
+        if not isSelected then
+            local tween = TweenService:Create(button, self.Animations.ButtonHover, {
+                BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+            })
+            tween:Play()
+        end
+    end)
+    
+    return button
+end
+
+function UnknowHubGUI:CreateEmotesTab()
+    local frame = Instance.new("Frame")
+    frame.Name = "EmotesTab"
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = 1
+    
+    -- Search box
+    local searchBox = Instance.new("TextBox")
+    searchBox.Name = "SearchBox"
+    searchBox.Size = UDim2.new(1, 0, 0, 35)
+    searchBox.Position = UDim2.new(0, 0, 0, 0)
+    searchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+    searchBox.PlaceholderText = "Search emotes..."
+    searchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+    searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    searchBox.TextSize = 14
+    searchBox.Font = Enum.Font.Gotham
+    searchBox.ClearTextOnFocus = false
+    searchBox.Parent = frame
+    
+    local searchCorner = Instance.new("UICorner")
+    searchCorner.CornerRadius = UDim.new(0, 8)
+    searchCorner.Parent = searchBox
+    
+    local searchPadding = Instance.new("UIPadding")
+    searchPadding.PaddingLeft = UDim.new(0, 10)
+    searchPadding.Parent = searchBox
+    
+    -- Emotes scroll frame
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Name = "EmotesScroll"
+    scrollFrame.Size = UDim2.new(1, 0, 1, -45)
+    scrollFrame.Position = UDim2.new(0, 0, 0, 45)
+    scrollFrame.BackgroundTransparency = 1
+    scrollFrame.ScrollBarThickness = 4
+    scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 150)
+    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scrollFrame.Parent = frame
+    
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 8)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = scrollFrame
+    
+    -- Load emotes
+    self:LoadEmotes(scrollFrame)
+    
+    return frame
+end
+
+function UnknowHubGUI:LoadEmotes(scrollFrame)
+    if not isfolder(emotesFolder) then
+        return
+    end
+    
+    -- Clear existing emotes
+    for _, child in ipairs(scrollFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    
+    self.emotes = {}
+    
+    -- Read all emote files
+    local success, files = pcall(function()
+        return listfiles(emotesFolder)
+    end)
+    
+    if not success then
+        warn("Failed to read emotes folder: " .. tostring(files))
+        return
+    end
+    
+    for _, filePath in ipairs(files) do
+        local fileName = filePath:match("([^/]+)%.txt$")
+        if fileName then
+            local success, content = pcall(readfile, filePath)
+            if success then
+                table.insert(self.emotes, {
+                    name = fileName,
+                    id = content:gsub("%s+", ""), -- Remove whitespace
+                    filePath = filePath
+                })
+            end
+        end
+    end
+    
+    -- Create emote buttons
+    for i, emote in ipairs(self.emotes) do
+        local emoteButton = Instance.new("TextButton")
+        emoteButton.Name = "Emote_" .. emote.name
+        emoteButton.Size = UDim2.new(1, 0, 0, 50)
+        emoteButton.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+        emoteButton.Text = ""
+        emoteButton.AutoButtonColor = false
+        emoteButton.LayoutOrder = i
+        emoteButton.Parent = scrollFrame
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = emoteButton
+        
+        local emoteName = Instance.new("TextLabel")
+        emoteName.Name = "EmoteName"
+        emoteName.Size = UDim2.new(0.6, 0, 1, 0)
+        emoteName.Position = UDim2.new(0, 15, 0, 0)
+        emoteName.BackgroundTransparency = 1
+        emoteName.Text = emote.name
+        emoteName.TextColor3 = Color3.fromRGB(255, 255, 255)
+        emoteName.TextSize = 14
+        emoteName.Font = Enum.Font.GothamBold
+        emoteName.TextXAlignment = Enum.TextXAlignment.Left
+        emoteName.Parent = emoteButton
+        
+        local emoteId = Instance.new("TextLabel")
+        emoteId.Name = "EmoteID"
+        emoteId.Size = UDim2.new(0.6, 0, 1, 0)
+        emoteId.Position = UDim2.new(0, 15, 0, 0)
+        emoteId.BackgroundTransparency = 1
+        emoteId.Text = "ID: " .. emote.id
+        emoteId.TextColor3 = Color3.fromRGB(200, 200, 200)
+        emoteId.TextSize = 12
+        emoteId.Font = Enum.Font.Gotham
+        emoteId.TextXAlignment = Enum.TextXAlignment.Left
+        emoteId.Parent = emoteButton
+        
+        -- Position the ID below the name
+        emoteName.Position = UDim2.new(0, 15, 0, 5)
+        emoteName.Size = UDim2.new(0.6, 0, 0, 20)
+        emoteId.Position = UDim2.new(0, 15, 0, 25)
+        emoteId.Size = UDim2.new(0.6, 0, 0, 15)
+        
+        local loadButton = Instance.new("TextButton")
+        loadButton.Name = "LoadButton"
+        loadButton.Size = UDim2.new(0, 80, 0, 30)
+        loadButton.Position = UDim2.new(1, -90, 0.5, -15)
+        loadButton.AnchorPoint = Vector2.new(0.5, 0.5)
+        loadButton.BackgroundColor3 = Color3.fromRGB(70, 150, 70)
+        loadButton.Text = "LOAD"
+        loadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        loadButton.TextSize = 12
+        loadButton.Font = Enum.Font.GothamBold
+        loadButton.AutoButtonColor = false
+        loadButton.Parent = emoteButton
+        
+        local loadCorner = Instance.new("UICorner")
+        loadCorner.CornerRadius = UDim.new(0, 6)
+        loadCorner.Parent = loadButton
+        
+        -- Animations
+        self:SetupButtonAnimations(emoteButton, loadButton, emote)
+    end
+end
+
+function UnknowHubGUI:SetupButtonAnimations(emoteButton, loadButton, emote)
+    -- Main button hover
+    emoteButton.MouseEnter:Connect(function()
+        local tween = TweenService:Create(emoteButton, self.Animations.ButtonHover, {
+            BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+        })
+        tween:Play()
+    end)
+    
+    emoteButton.MouseLeave:Connect(function()
+        local tween = TweenService:Create(emoteButton, self.Animations.ButtonHover, {
+            BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+        })
+        tween:Play()
+    end)
+    
+    -- Load button animations
+    loadButton.MouseEnter:Connect(function()
+        local tween = TweenService:Create(loadButton, self.Animations.ButtonHover, {
+            BackgroundColor3 = Color3.fromRGB(90, 180, 90),
+            Size = UDim2.new(0, 85, 0, 32)
+        })
+        tween:Play()
+    end)
+    
+    loadButton.MouseLeave:Connect(function()
+        local tween = TweenService:Create(loadButton, self.Animations.ButtonHover, {
+            BackgroundColor3 = Color3.fromRGB(70, 150, 70),
+            Size = UDim2.new(0, 80, 0, 30)
+        })
+        tween:Play()
+    end)
+    
+    loadButton.MouseButton1Down:Connect(function()
+        local tween = TweenService:Create(loadButton, self.Animations.ButtonClick, {
+            BackgroundColor3 = Color3.fromRGB(50, 120, 50),
+            Size = UDim2.new(0, 75, 0, 28)
+        })
+        tween:Play()
+    end)
+    
+    loadButton.MouseButton1Up:Connect(function()
+        local tween = TweenService:Create(loadButton, self.Animations.ButtonHover, {
+            BackgroundColor3 = Color3.fromRGB(90, 180, 90),
+            Size = UDim2.new(0, 85, 0, 32)
+        })
+        tween:Play()
+        
+        -- Load emote functionality
+        self:LoadEmote(emote)
+    end)
+end
+
+function UnknowHubGUI:LoadEmote(emote)
+    print("Loading emote: " .. emote.name .. " (ID: " .. emote.id .. ")")
+    
+    -- Here you would integrate with your emote system
+    -- For example:
+    -- game.Players.LocalPlayer.Character.Humanoid:LoadAnimation(emote.id):Play()
+    
+    -- Show loading feedback
+    local notification = self:CreateNotification("Loaded: " .. emote.name)
+    notification.Parent = self.gui
+    
+    -- Auto-remove notification after 2 seconds
+    delay(2, function()
+        if notification then
+            notification:Destroy()
+        end
+    end)
+end
+
+function UnknowHubGUI:CreateSettingsTab()
+    local frame = Instance.new("Frame")
+    frame.Name = "SettingsTab"
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = 1
+    
+    local settings = {
+        "Auto-load on join",
+        "Show emote notifications",
+        "Enable sound effects",
+        "Dark mode",
+        "Compact view"
+    }
+    
+    for i, setting in ipairs(settings) do
+        local settingFrame = Instance.new("Frame")
+        settingFrame.Name = setting .. "Setting"
+        settingFrame.Size = UDim2.new(1, 0, 0, 50)
+        settingFrame.Position = UDim2.new(0, 0, 0, (i-1) * 55)
+        settingFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+        settingFrame.BackgroundTransparency = 0
+        settingFrame.Parent = frame
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = settingFrame
+        
+        local label = Instance.new("TextLabel")
+        label.Name = "Label"
+        label.Size = UDim2.new(0.7, 0, 1, 0)
+        label.Position = UDim2.new(0, 15, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = setting
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextSize = 14
+        label.Font = Enum.Font.Gotham
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = settingFrame
+        
+        local toggle = Instance.new("TextButton")
+        toggle.Name = "Toggle"
+        toggle.Size = UDim2.new(0, 40, 0, 20)
+        toggle.Position = UDim2.new(1, -50, 0.5, -10)
+        toggle.AnchorPoint = Vector2.new(0.5, 0.5)
+        toggle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+        toggle.Text = ""
+        toggle.AutoButtonColor = false
+        toggle.Parent = settingFrame
+        
+        local toggleCorner = Instance.new("UICorner")
+        toggleCorner.CornerRadius = UDim.new(1, 0)
+        toggleCorner.Parent = toggle
+        
+        local toggleKnob = Instance.new("Frame")
+        toggleKnob.Name = "Knob"
+        toggleKnob.Size = UDim2.new(0, 16, 0, 16)
+        toggleKnob.Position = UDim2.new(0, 2, 0.5, -8)
+        toggleKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+        toggleKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        toggleKnob.Parent = toggle
+        
+        local knobCorner = Instance.new("UICorner")
+        knobCorner.CornerRadius = UDim.new(1, 0)
+        knobCorner.Parent = toggleKnob
+        
+        -- Toggle functionality
+        self:SetupToggleAnimation(toggle, toggleKnob, setting)
+    end
+    
+    return frame
+end
+
+function UnknowHubGUI:SetupToggleAnimation(toggle, knob, settingName)
+    local isOn = false
+    
+    toggle.MouseButton1Click:Connect(function()
+        isOn = not isOn
+        
+        local targetPosition = isOn and UDim2.new(1, -2, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        local targetColor = isOn and Color3.fromRGB(70, 150, 70) or Color3.fromRGB(80, 80, 80)
+        
+        local tween1 = TweenService:Create(knob, self.Animations.ButtonHover, {
+            Position = targetPosition
+        })
+        
+        local tween2 = TweenService:Create(toggle, self.Animations.ButtonHover, {
+            BackgroundColor3 = targetColor
+        })
+        
+        tween1:Play()
+        tween2:Play()
+        
+        -- Save setting
+        self.settings[settingName] = isOn
+        print("Setting '" .. settingName .. "' set to: " .. tostring(isOn))
+    end)
+end
+
+function UnknowHubGUI:CreateNotification(message)
+    local notification = Instance.new("Frame")
+    notification.Name = "Notification"
+    notification.Size = UDim2.new(0, 300, 0, 60)
+    notification.Position = UDim2.new(0.5, -150, 1, -80)
+    notification.AnchorPoint = Vector2.new(0.5, 0.5)
+    notification.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+    notification.BackgroundTransparency = 0.1
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = notification
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(100, 150, 100)
+    stroke.Thickness = 2
+    stroke.Parent = notification
+    
+    local label = Instance.new("TextLabel")
+    label.Name = "Message"
+    label.Size = UDim2.new(1, -20, 1, -20)
+    label.Position = UDim2.new(0, 10, 0, 10)
+    label.BackgroundTransparency = 1
+    label.Text = message
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextSize = 14
+    label.Font = Enum.Font.Gotham
+    label.TextWrapped = true
+    label.Parent = notification
+    
+    -- Animate entrance
+    notification.Position = UDim2.new(0.5, -150, 1, 100)
+    local tween = TweenService:Create(notification, self.Animations.PanelSlide, {
+        Position = UDim2.new(0.5, -150, 1, -80)
+    })
+    tween:Play()
+    
+    return notification
+end
+
+function UnknowHubGUI:MakeDraggable(dragHandle, mainFrame)
+    local dragging = false
+    local dragInput, dragStart, startPos
+    
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    dragHandle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+function UnknowHubGUI:ConnectEvents(emotesTab, settingsTab, closeButton)
+    -- Tab switching
+    emotesTab.MouseButton1Click:Connect(function()
+        self:SwitchTab("Emotes", emotesTab, settingsTab)
+    end)
+    
+    settingsTab.MouseButton1Click:Connect(function()
+        self:SwitchTab("Settings", emotesTab, settingsTab)
+    end)
+    
+    -- Close button
+    closeButton.MouseButton1Click:Connect(function()
+        self:CloseGUI()
+    end)
+    
+    -- Escape key to close
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if input.KeyCode == Enum.KeyCode.Escape and not gameProcessed then
+            self:CloseGUI()
+        end
+    end)
+end
+
+function UnknowHubGUI:SwitchTab(tabName, emotesTab, settingsTab)
+    if self.currentTab == tabName then return end
+    
+    self.currentTab = tabName
+    
+    -- Update tab buttons
+    emotesTab.BackgroundColor3 = tabName == "Emotes" and Color3.fromRGB(70, 70, 120) or Color3.fromRGB(50, 50, 80)
+    settingsTab.BackgroundColor3 = tabName == "Settings" and Color3.fromRGB(70, 70, 120) or Color3.fromRGB(50, 50, 80)
+    
+    -- Slide animation
+    if tabName == "Emotes" then
+        local tween1 = TweenService:Create(self.emotesContent, self.Animations.PanelSlide, {
+            Position = UDim2.new(0, 0, 0, 0)
+        })
+        local tween2 = TweenService:Create(self.settingsContent, self.Animations.PanelSlide, {
+            Position = UDim2.new(1, 0, 0, 0)
+        })
+        tween1:Play()
+        tween2:Play()
+    else
+        local tween1 = TweenService:Create(self.emotesContent, self.Animations.PanelSlide, {
+            Position = UDim2.new(-1, 0, 0, 0)
+        })
+        local tween2 = TweenService:Create(self.settingsContent, self.Animations.PanelSlide, {
+            Position = UDim2.new(0, 0, 0, 0)
+        })
+        tween1:Play()
+        tween2:Play()
+    end
+end
+
+function UnknowHubGUI:CloseGUI()
+    if self.gui then
+        -- Fade out animation
+        local tween = TweenService:Create(self.gui.MainFrame, self.Animations.Fade, {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0, 0, 0, 0)
+        })
+        tween:Play()
+        
+        tween.Completed:Wait()
+        self.gui:Destroy()
+        self.gui = nil
+    end
+end
+
+function UnknowHubGUI:ToggleGUI()
+    if self.gui and self.gui.Parent then
+        self:CloseGUI()
+    else
+        local gui = self:CreateMainGUI()
+        gui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+        
+        -- Entrance animation
+        self.gui.MainFrame.Size = UDim2.new(0, 0, 0, 0)
+        self.gui.MainFrame.BackgroundTransparency = 1
+        
+        local tween = TweenService:Create(self.gui.MainFrame, self.Animations.PanelSlide, {
+            Size = UDim2.new(0, 450, 0, 500),
+            BackgroundTransparency = 0.1
+        })
+        tween:Play()
+    end
+end
+
+-- Export the library
+return UnknowHubGUI
