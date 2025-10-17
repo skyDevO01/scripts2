@@ -257,33 +257,51 @@ function UI:AddTab(name)
         self:SelectTab(Tab)
     end)
     
-    -- Set as first tab if none selected
-    if #self.Tabs == 0 then
-        self:SelectTab(Tab)
-    end
-    
     Tab.Button = TabButton
     Tab.Content = TabContent
     Tab.Name = name
     Tab.Sections = {}
     
     table.insert(self.Tabs, Tab)
-    return Tab
+    
+    -- Set as first tab if none selected
+    if #self.Tabs == 1 then
+        self:SelectTab(Tab)
+    end
+    
+    return setmetatable(Tab, {
+        __index = function(self, key)
+            if key == "AddSection" then
+                return function(_, name, side)
+                    return UI:AddSection(self, name, side)
+                end
+            end
+            return rawget(self, key)
+        end
+    })
 end
 
 function UI:SelectTab(tab)
     if self.CurrentTab then
-        self.CurrentTab.Content.Visible = false
-        self:TweenObject(self.CurrentTab.Button, {BackgroundColor3 = Color3.fromRGB(40, 40, 50)}, 0.2)
+        if self.CurrentTab.Content then
+            self.CurrentTab.Content.Visible = false
+        end
+        if self.CurrentTab.Button then
+            self:TweenObject(self.CurrentTab.Button, {BackgroundColor3 = Color3.fromRGB(40, 40, 50)}, 0.2)
+        end
     end
     
     self.CurrentTab = tab
-    tab.Content.Visible = true
-    self:TweenObject(tab.Button, {BackgroundColor3 = Color3.fromRGB(0, 170, 255)}, 0.2)
+    if tab.Content then
+        tab.Content.Visible = true
+    end
+    if tab.Button then
+        self:TweenObject(tab.Button, {BackgroundColor3 = Color3.fromRGB(0, 170, 255)}, 0.2)
+    end
 end
 
 -- Section management
-function UI:AddSection(name, side)
+function UI:AddSection(tab, name, side)
     side = side or "Left"
     
     local Section = {}
@@ -293,6 +311,7 @@ function UI:AddSection(name, side)
     SectionFrame.Size = UDim2.new(0.95, 0, 0, 0)
     SectionFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
     SectionFrame.BorderSizePixel = 0
+    SectionFrame.AutomaticSize = Enum.AutomaticSize.Y
     
     local UICorner = Instance.new("UICorner")
     UICorner.CornerRadius = UDim.new(0, 6)
@@ -316,20 +335,52 @@ function UI:AddSection(name, side)
     Content.Position = UDim2.new(0, 10, 0, 35)
     Content.BackgroundTransparency = 1
     Content.BorderSizePixel = 0
+    Content.AutomaticSize = Enum.AutomaticSize.Y
     
     local UIListLayout = Instance.new("UIListLayout")
     UIListLayout.Padding = UDim.new(0, 8)
     UIListLayout.Parent = Content
     
     Content.Parent = SectionFrame
-    SectionFrame.Parent = self.CurrentTab.Content
-    SectionFrame.AutomaticSize = Enum.AutomaticSize.Y
+    SectionFrame.Parent = tab.Content
     
     Section.Frame = SectionFrame
     Section.Content = Content
     
-    table.insert(self.CurrentTab.Sections, Section)
-    return Section
+    table.insert(tab.Sections, Section)
+    
+    return setmetatable(Section, {
+        __index = function(self, key)
+            local elementMethods = {
+                AddButton = function(_, text, callback)
+                    return UI:AddButton(self, text, callback)
+                end,
+                AddToggle = function(_, text, default, callback)
+                    return UI:AddToggle(self, text, default, callback)
+                end,
+                AddTextbox = function(_, text, placeholder, callback)
+                    return UI:AddTextbox(self, text, placeholder, callback)
+                end,
+                AddDropdown = function(_, text, options, callback)
+                    return UI:AddDropdown(self, text, options, callback)
+                end,
+                AddLabel = function(_, text)
+                    return UI:AddLabel(self, text)
+                end,
+                AddKeybind = function(_, text, default, callback)
+                    return UI:AddKeybind(self, text, default, callback)
+                end,
+                AddColorPicker = function(_, text, default, callback)
+                    return UI:AddColorPicker(self, text, default, callback)
+                end
+            }
+            
+            if elementMethods[key] then
+                return elementMethods[key]
+            end
+            return rawget(self, key)
+        end
+    })
 end
 
 -- UI Elements
@@ -351,7 +402,9 @@ function UI:AddButton(section, text, callback)
         self:TweenObject(Button, {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}, 0.1)
         task.wait(0.1)
         self:TweenObject(Button, {BackgroundColor3 = Color3.fromRGB(45, 45, 55)}, 0.1)
-        callback()
+        if callback then
+            callback()
+        end
     end)
     
     Button.Parent = section.Content
@@ -408,7 +461,9 @@ function UI:AddToggle(section, text, default, callback)
             self:TweenObject(ToggleButton, {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}, 0.2)
             self:TweenObject(ToggleKnob, {Position = UDim2.new(0, 2, 0.5, -8)}, 0.2)
         end
-        callback(state)
+        if callback then
+            callback(state)
+        end
     end
     
     ToggleButton.MouseButton1Click:Connect(function()
@@ -443,7 +498,7 @@ function UI:AddTextbox(section, text, placeholder, callback)
     Input.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
     Input.BorderSizePixel = 0
     Input.Text = ""
-    Input.PlaceholderText = placeholder
+    Input.PlaceholderText = placeholder or ""
     Input.TextColor3 = Color3.fromRGB(255, 255, 255)
     Input.TextSize = 14
     Input.Font = Enum.Font.Gotham
@@ -454,7 +509,7 @@ function UI:AddTextbox(section, text, placeholder, callback)
     UICorner.Parent = Input
     
     Input.FocusLost:Connect(function(enterPressed)
-        if enterPressed then
+        if enterPressed and callback then
             callback(Input.Text)
         end
     end)
@@ -530,7 +585,9 @@ function UI:AddDropdown(section, text, options, callback)
         OptionButton.MouseButton1Click:Connect(function()
             selected = option
             MainButton.Text = selected
-            callback(selected)
+            if callback then
+                callback(selected)
+            end
             self:ToggleDropdown(Dropdown)
         end)
         
@@ -544,7 +601,9 @@ function UI:AddDropdown(section, text, options, callback)
     function Dropdown:SetValue(value)
         selected = value
         MainButton.Text = selected
-        callback(selected)
+        if callback then
+            callback(selected)
+        end
     end
     
     MainButton.MouseButton1Click:Connect(function()
@@ -631,7 +690,9 @@ function UI:AddKeybind(section, text, default, callback)
             listening = false
             KeybindButton.Text = input.KeyCode.Name
             self:TweenObject(KeybindButton, {BackgroundColor3 = Color3.fromRGB(45, 45, 55)}, 0.2)
-            callback(input.KeyCode)
+            if callback then
+                callback(input.KeyCode)
+            end
             connection:Disconnect()
         end
     end)
@@ -672,63 +733,24 @@ function UI:AddColorPicker(section, text, default, callback)
     UICorner.CornerRadius = UDim.new(0, 4)
     UICorner.Parent = ColorButton
     
-    local PickerFrame = Instance.new("Frame")
-    PickerFrame.Size = UDim2.new(1, 0, 0, 100)
-    PickerFrame.Position = UDim2.new(0, 0, 1, 5)
-    PickerFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-    PickerFrame.BorderSizePixel = 0
-    PickerFrame.Visible = false
-    
-    local UICorner2 = Instance.new("UICorner")
-    UICorner2.CornerRadius = UDim.new(0, 4)
-    UICorner2.Parent = PickerFrame
-    
-    -- Color spectrum (simplified)
-    local Spectrum = Instance.new("ImageLabel")
-    Spectrum.Size = UDim2.new(0.7, -5, 0, 80)
-    Spectrum.Position = UDim2.new(0, 5, 0, 10)
-    Spectrum.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Spectrum.BorderSizePixel = 0
-    Spectrum.Image = "rbxassetid://14204231522" -- Color spectrum image
-    Spectrum.Parent = PickerFrame
-    
-    local Brightness = Instance.new("Frame")
-    Brightness.Size = UDim2.new(0, 20, 0, 80)
-    Brightness.Position = UDim2.new(0.7, 10, 0, 10)
-    Brightness.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Brightness.BorderSizePixel = 0
-    Brightness.Parent = PickerFrame
-    
-    local UICorner3 = Instance.new("UICorner")
-    UICorner3.CornerRadius = UDim.new(0, 4)
-    UICorner3.Parent = Brightness
-    
-    local BrightnessGradient = Instance.new("UIGradient")
-    BrightnessGradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-        ColorSequenceKeypoint.new(1, Color3.new(0, 0, 0))
-    }
-    BrightnessGradient.Rotation = 90
-    BrightnessGradient.Parent = Brightness
+    ColorButton.MouseButton1Click:Connect(function()
+        if callback then
+            callback(currentColor)
+        end
+    end)
     
     ColorButton.Parent = ColorPickerFrame
-    PickerFrame.Parent = ColorPickerFrame
+    ColorPickerFrame.Parent = section.Content
     
-    function ColorPicker:Toggle()
-        state = not state
-        PickerFrame.Visible = state
-        if state then
-            self:TweenObject(ColorPickerFrame, {Size = UDim2.new(1, 0, 0, 140)}, 0.2)
-        else
-            self:TweenObject(ColorPickerFrame, {Size = UDim2.new(1, 0, 0, 30)}, 0.2)
+    ColorPicker.Button = ColorButton
+    ColorPicker.SetColor = function(color)
+        currentColor = color
+        ColorButton.BackgroundColor3 = color
+        if callback then
+            callback(color)
         end
     end
     
-    ColorButton.MouseButton1Click:Connect(function()
-        ColorPicker:Toggle()
-    end)
-    
-    ColorPickerFrame.Parent = section.Content
     return ColorPicker
 end
 
@@ -738,7 +760,6 @@ local SettingsTab = UI:AddTab("Settings")
 -- Toggle UI keybind
 local SettingsSection = SettingsTab:AddSection("UI Settings", "Left")
 UI:AddKeybind(SettingsSection, "Toggle UI", Enum.KeyCode.RightShift, function(key)
-    -- Toggle UI visibility
     MainFrame.Visible = not MainFrame.Visible
     UI:Notify("UI Toggled", "UI has been " .. (MainFrame.Visible and "enabled" or "disabled"), 3)
 end)
@@ -752,12 +773,10 @@ end)
 -- Config system (simplified)
 local ConfigSection = SettingsTab:AddSection("Configs", "Left")
 UI:AddTextbox(ConfigSection, "Config Name", "Enter config name", function(text)
-    -- Save config logic would go here
     UI:Notify("Config Saved", "Config '" .. text .. "' has been saved", 3)
 end)
 
 UI:AddDropdown(ConfigSection, "Load Config", {"Default", "Config 1", "Config 2"}, function(selected)
-    -- Load config logic would go here
     UI:Notify("Config Loaded", "Config '" .. selected .. "' has been loaded", 3)
 end)
 
