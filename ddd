@@ -439,7 +439,7 @@ function Library:CreateWindow(name)
         local containerLayout = Instance.new("UIListLayout")
         local containerShadow = Instance.new("ImageLabel")
         
-        dropdownContainer.Size = UDim2.new(0, 200, 0, 0)  -- Set a default width to avoid 0 width issues
+        dropdownContainer.Size = UDim2.new(0, 0, 0, 0)
         dropdownContainer.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
         dropdownContainer.BorderSizePixel = 0
         dropdownContainer.ClipsDescendants = true
@@ -464,6 +464,18 @@ function Library:CreateWindow(name)
         containerShadow.ZIndex = 4
         
         local open = false
+        local connection
+        
+        -- Function to update position and size
+        local function updateDropdownPosition()
+            local width = dropdown.AbsoluteSize.X
+            if width == 0 then
+                width = 200
+            end
+            local height = #options * 30
+            dropdownContainer.Position = UDim2.new(0, window.mainFrame.AbsolutePosition.X + window.mainFrame.AbsoluteSize.X + 5, 0, dropdown.AbsolutePosition.Y)
+            dropdownContainer.Size = UDim2.new(0, width, 0, height)
+        end
         
         -- Create option buttons
         for i, option in ipairs(options) do
@@ -503,7 +515,7 @@ function Library:CreateWindow(name)
                 
                 -- Close dropdown with animation
                 local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(dropdownContainer.Size.X.Scale, dropdownContainer.Size.X.Offset, 0, 0)
+                    Size = UDim2.new(dropdownContainer.Size.X, 0, 0, 0)
                 })
                 closeTween:Play()
                 
@@ -516,6 +528,11 @@ function Library:CreateWindow(name)
                 -- Rotate arrow back
                 local arrowTween = TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 0})
                 arrowTween:Play()
+                
+                if connection then
+                    connection:Disconnect()
+                    connection = nil
+                end
                 
                 if soundEnabled then
                     clickSound:Play()
@@ -541,30 +558,26 @@ function Library:CreateWindow(name)
         dropdown.MouseButton1Click:Connect(function()
             open = not open
             
-            local width = dropdown.AbsoluteSize.X
-            if width == 0 then
-                width = 200  -- Fallback width if AbsoluteSize not available
-            end
-            
             if open then
-                -- Position to the right of the main GUI
-                dropdownContainer.Position = UDim2.new(0, window.mainFrame.AbsolutePosition.X + window.mainFrame.AbsoluteSize.X + 5, 0, dropdown.AbsolutePosition.Y)
-                dropdownContainer.Size = UDim2.new(0, width, 0, 0)
+                updateDropdownPosition()
                 dropdownContainer.Visible = true
                 
                 -- Animate opening
                 local openTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(0, width, 0, #options * 30)
+                    Size = dropdownContainer.Size  -- Already set to full size
                 })
                 openTween:Play()
                 
                 -- Rotate arrow
                 local arrowTween = TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 180})
                 arrowTween:Play()
+                
+                -- Start updating position
+                connection = RunService.Heartbeat:Connect(updateDropdownPosition)
             else
                 -- Animate closing
                 local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(0, width, 0, 0)
+                    Size = UDim2.new(dropdownContainer.Size.X, 0, 0, 0)
                 })
                 closeTween:Play()
                 
@@ -575,6 +588,11 @@ function Library:CreateWindow(name)
                 -- Rotate arrow back
                 local arrowTween = TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 0})
                 arrowTween:Play()
+                
+                if connection then
+                    connection:Disconnect()
+                    connection = nil
+                end
             end
             
             if soundEnabled then
@@ -597,12 +615,8 @@ function Library:CreateWindow(name)
                 local isInDropdown = isInDD or isInD
                 if not isInDropdown then
                     open = false
-                    local width = dropdown.AbsoluteSize.X
-                    if width == 0 then
-                        width = 200
-                    end
                     local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                        Size = UDim2.new(0, width, 0, 0)
+                        Size = UDim2.new(dropdownContainer.Size.X, 0, 0, 0)
                     })
                     closeTween:Play()
                     
@@ -612,6 +626,11 @@ function Library:CreateWindow(name)
                     
                     local arrowTween = TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 0})
                     arrowTween:Play()
+                    
+                    if connection then
+                        connection:Disconnect()
+                        connection = nil
+                    end
                 end
             end
         end
