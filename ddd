@@ -1,5 +1,5 @@
 --[[
-    GUI Library Example Usage:
+    Enhanced GUI Library Example Usage:
     local ui = loadstring(game:HttpGet("URL_TO_THIS_SCRIPT"))()
     local window = ui:CreateWindow("My GUI")
     
@@ -23,65 +23,219 @@
 local Library = {}
 Library.__index = Library
 
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
 function Library:CreateWindow(name)
     local screenGui = Instance.new("ScreenGui")
     local frame = Instance.new("Frame")
     local container = Instance.new("Frame")
     local uiListLayout = Instance.new("UIListLayout")
     local title = Instance.new("TextLabel")
+    local resizeHandle = Instance.new("Frame")
     
     screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
     screenGui.Name = "LibraryGui"
+    screenGui.ResetOnSpawn = false
     
     frame.Parent = screenGui
-    frame.Size = UDim2.new(0, 200, 0, 300)
-    frame.Position = UDim2.new(0.5, -100, 0.5, -150)
+    frame.Size = UDim2.new(0, 250, 0, 350)
+    frame.Position = UDim2.new(0.5, -125, 0.5, -175)
     frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 0
+    frame.ClipsDescendants = true
+    
+    -- Add corner rounding
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+    
+    -- Add shadow effect
+    local shadow = Instance.new("ImageLabel")
+    shadow.Parent = frame
+    shadow.Size = UDim2.new(1, 0, 1, 0)
+    shadow.Position = UDim2.new(0, 0, 0, 0)
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxassetid://1316045217"
+    shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.ImageTransparency = 0.8
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(10, 10, 118, 118)
+    shadow.ZIndex = -1
     
     title.Parent = frame
-    title.Size = UDim2.new(1, 0, 0, 30)
-    title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    title.Size = UDim2.new(1, 0, 0, 35)
+    title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Text = name
-    title.Font = Enum.Font.Gotham
-    title.TextSize = 14
+    title.Font = Enum.Font.GothamSemibold
+    title.TextSize = 16
+    title.BorderSizePixel = 0
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 8)
+    titleCorner.Parent = title
     
     container.Parent = frame
-    container.Size = UDim2.new(1, -10, 1, -40)
-    container.Position = UDim2.new(0, 5, 0, 35)
+    container.Size = UDim2.new(1, -10, 1, -50)
+    container.Position = UDim2.new(0, 5, 0, 40)
     container.BackgroundTransparency = 1
     
     uiListLayout.Parent = container
     uiListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    uiListLayout.Padding = UDim.new(0, 5)
+    uiListLayout.Padding = UDim.new(0, 8)
+    
+    -- Resize handle
+    resizeHandle.Parent = frame
+    resizeHandle.Size = UDim2.new(0, 15, 0, 15)
+    resizeHandle.Position = UDim2.new(1, -15, 1, -15)
+    resizeHandle.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    resizeHandle.BorderSizePixel = 0
+    
+    local resizeCorner = Instance.new("UICorner")
+    resizeCorner.CornerRadius = UDim.new(0, 4)
+    resizeCorner.Parent = resizeHandle
+    
+    -- Dragging functionality
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPos
+    
+    local function update(input)
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    
+    title.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    title.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            update(input)
+        end
+    end)
+    
+    -- Resizing functionality
+    local resizing = false
+    local resizeStart
+    local startSize
+    
+    resizeHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            resizing = true
+            resizeStart = input.Position
+            startSize = frame.Size
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    resizing = false
+                end
+            end)
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - resizeStart
+            local newSize = UDim2.new(
+                startSize.X.Scale, 
+                math.max(200, startSize.X.Offset + delta.X),
+                startSize.Y.Scale, 
+                math.max(150, startSize.Y.Offset + delta.Y)
+            )
+            
+            -- Animate resize
+            local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(frame, tweenInfo, {Size = newSize})
+            tween:Play()
+        end
+    end)
     
     local window = {}
     window.container = container
-    
+    window.mainFrame = frame
+
     function window:Button(text, callback)
         local button = Instance.new("TextButton")
-        button.Size = UDim2.new(1, 0, 0, 30)
+        local buttonCorner = Instance.new("UICorner")
+        
+        button.Size = UDim2.new(1, 0, 0, 35)
         button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         button.TextColor3 = Color3.fromRGB(255, 255, 255)
         button.Text = text
         button.Font = Enum.Font.Gotham
         button.TextSize = 14
+        button.AutoButtonColor = false
         button.Parent = self.container
         
-        button.MouseButton1Click:Connect(function()
+        buttonCorner.CornerRadius = UDim.new(0, 6)
+        buttonCorner.Parent = button
+        
+        -- Hover animation
+        button.MouseEnter:Connect(function()
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(button, tweenInfo, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)})
+            tween:Play()
+        end)
+        
+        button.MouseLeave:Connect(function()
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(button, tweenInfo, {BackgroundColor3 = Color3.fromRGB(60, 60, 60)})
+            tween:Play()
+        end)
+        
+        -- Click animation
+        button.MouseButton1Down:Connect(function()
+            local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(button, tweenInfo, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)})
+            tween:Play()
+        end)
+        
+        button.MouseButton1Up:Connect(function()
+            local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(button, tweenInfo, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)})
+            tween:Play()
+            
             callback()
         end)
     end
     
     function window:Toggle(text, default, callback)
         local toggle = Instance.new("TextButton")
+        local toggleCorner = Instance.new("UICorner")
         local status = Instance.new("Frame")
+        local statusCorner = Instance.new("UICorner")
+        local innerDot = Instance.new("Frame")
+        local innerCorner = Instance.new("UICorner")
         
-        toggle.Size = UDim2.new(1, 0, 0, 30)
+        toggle.Size = UDim2.new(1, 0, 0, 35)
         toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         toggle.Text = ""
+        toggle.AutoButtonColor = false
         toggle.Parent = self.container
+        
+        toggleCorner.CornerRadius = UDim.new(0, 6)
+        toggleCorner.Parent = toggle
         
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(0.7, 0, 1, 0)
@@ -93,80 +247,261 @@ function Library:CreateWindow(name)
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Parent = toggle
         
-        status.Size = UDim2.new(0, 20, 0, 20)
-        status.Position = UDim2.new(0.8, 0, 0.5, -10)
-        status.BackgroundColor3 = default and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+        status.Size = UDim2.new(0, 45, 0, 20)
+        status.Position = UDim2.new(0.85, -22, 0.5, -10)
+        status.BackgroundColor3 = default and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(60, 60, 60)
         status.Parent = toggle
+        
+        statusCorner.CornerRadius = UDim.new(0, 10)
+        statusCorner.Parent = status
+        
+        innerDot.Size = UDim2.new(0, 16, 0, 16)
+        innerDot.Position = UDim2.new(default and 0.6 or 0.1, 0, 0.1, 0)
+        innerDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        innerDot.Parent = status
+        
+        innerCorner.CornerRadius = UDim.new(0, 8)
+        innerCorner.Parent = innerDot
         
         local current = default
         
+        -- Hover animation
+        toggle.MouseEnter:Connect(function()
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(toggle, tweenInfo, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)})
+            tween:Play()
+        end)
+        
+        toggle.MouseLeave:Connect(function()
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(toggle, tweenInfo, {BackgroundColor3 = Color3.fromRGB(60, 60, 60)})
+            tween:Play()
+        end)
+        
         toggle.MouseButton1Click:Connect(function()
             current = not current
-            status.BackgroundColor3 = current and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+            
+            -- Animate toggle
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local bgTween = TweenService:Create(status, tweenInfo, {
+                BackgroundColor3 = current and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(60, 60, 60)
+            })
+            local dotTween = TweenService:Create(innerDot, tweenInfo, {
+                Position = UDim2.new(current and 0.6 or 0.1, 0, 0.1, 0)
+            })
+            
+            bgTween:Play()
+            dotTween:Play()
+            
             callback(current)
         end)
     end
     
     function window:Dropdown(text, options, callback)
         local dropdown = Instance.new("TextButton")
-        local container = Instance.new("Frame")
-        local open = false
+        local dropdownCorner = Instance.new("UICorner")
+        local arrow = Instance.new("ImageLabel")
         
-        dropdown.Size = UDim2.new(1, 0, 0, 30)
+        dropdown.Size = UDim2.new(1, 0, 0, 35)
         dropdown.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         dropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
-        dropdown.Text = text
+        dropdown.Text = "  " .. text
         dropdown.Font = Enum.Font.Gotham
         dropdown.TextSize = 14
+        dropdown.TextXAlignment = Enum.TextXAlignment.Left
+        dropdown.AutoButtonColor = false
         dropdown.Parent = self.container
         
-        container.Size = UDim2.new(1, 0, 0, 0)
-        container.Position = UDim2.new(0, 0, 1, 5)
-        container.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-        container.Visible = false
-        container.Parent = dropdown
+        dropdownCorner.CornerRadius = UDim.new(0, 6)
+        dropdownCorner.Parent = dropdown
         
-        local layout = Instance.new("UIListLayout")
-        layout.Parent = container
+        arrow.Size = UDim2.new(0, 20, 0, 20)
+        arrow.Position = UDim2.new(0.9, -10, 0.5, -10)
+        arrow.BackgroundTransparency = 1
+        arrow.Image = "rbxassetid://6031094667"
+        arrow.ImageColor3 = Color3.fromRGB(200, 200, 200)
+        arrow.Parent = dropdown
         
-        for _, option in ipairs(options) do
+        -- Create dropdown container (outside main GUI)
+        local dropdownContainer = Instance.new("Frame")
+        local containerCorner = Instance.new("UICorner")
+        local containerLayout = Instance.new("UIListLayout")
+        local containerShadow = Instance.new("ImageLabel")
+        
+        dropdownContainer.Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
+        dropdownContainer.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        dropdownContainer.BorderSizePixel = 0
+        dropdownContainer.ClipsDescendants = true
+        dropdownContainer.Visible = false
+        dropdownContainer.ZIndex = 5
+        dropdownContainer.Parent = screenGui
+        
+        containerCorner.CornerRadius = UDim.new(0, 6)
+        containerCorner.Parent = dropdownContainer
+        
+        containerLayout.Parent = dropdownContainer
+        containerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        
+        containerShadow.Parent = dropdownContainer
+        containerShadow.Size = UDim2.new(1, 0, 1, 0)
+        containerShadow.BackgroundTransparency = 1
+        containerShadow.Image = "rbxassetid://1316045217"
+        containerShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+        containerShadow.ImageTransparency = 0.8
+        containerShadow.ScaleType = Enum.ScaleType.Slice
+        containerShadow.SliceCenter = Rect.new(10, 10, 118, 118)
+        containerShadow.ZIndex = 4
+        
+        local open = false
+        
+        -- Create option buttons
+        for i, option in ipairs(options) do
             local optionButton = Instance.new("TextButton")
-            optionButton.Size = UDim2.new(1, 0, 0, 25)
-            optionButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            local optionCorner = Instance.new("UICorner")
+            
+            optionButton.Size = UDim2.new(1, 0, 0, 30)
+            optionButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
             optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-            optionButton.Text = option
+            optionButton.Text = "  " .. option
             optionButton.Font = Enum.Font.Gotham
-            optionButton.TextSize = 12
-            optionButton.Parent = container
+            optionButton.TextSize = 14
+            optionButton.TextXAlignment = Enum.TextXAlignment.Left
+            optionButton.AutoButtonColor = false
+            optionButton.ZIndex = 6
+            optionButton.Parent = dropdownContainer
+            
+            optionCorner.CornerRadius = UDim.new(0, 4)
+            optionCorner.Parent = optionButton
+            
+            -- Option hover animation
+            optionButton.MouseEnter:Connect(function()
+                local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                local tween = TweenService:Create(optionButton, tweenInfo, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)})
+                tween:Play()
+            end)
+            
+            optionButton.MouseLeave:Connect(function()
+                local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                local tween = TweenService:Create(optionButton, tweenInfo, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)})
+                tween:Play()
+            end)
             
             optionButton.MouseButton1Click:Connect(function()
                 callback(option)
-                dropdown.Text = text .. " : " .. option
-                container.Visible = false
+                dropdown.Text = "  " .. text .. " : " .. option
+                
+                -- Close dropdown with animation
+                local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
+                    Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
+                })
+                closeTween:Play()
+                
+                closeTween.Completed:Connect(function()
+                    dropdownContainer.Visible = false
+                end)
+                
                 open = false
-                container.Size = UDim2.new(1, 0, 0, 0)
+                
+                -- Rotate arrow back
+                local arrowTween = TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 0})
+                arrowTween:Play()
             end)
         end
         
+        -- Hover animation for dropdown
+        dropdown.MouseEnter:Connect(function()
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(dropdown, tweenInfo, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)})
+            tween:Play()
+        end)
+        
+        dropdown.MouseLeave:Connect(function()
+            if not open then
+                local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                local tween = TweenService:Create(dropdown, tweenInfo, {BackgroundColor3 = Color3.fromRGB(60, 60, 60)})
+                tween:Play()
+            end
+        end)
+        
         dropdown.MouseButton1Click:Connect(function()
             open = not open
+            
             if open then
-                container.Size = UDim2.new(1, 0, 0, #options * 25)
+                -- Position dropdown container next to main GUI
+                local dropdownPos = UDim2.new(
+                    0, dropdown.AbsolutePosition.X + dropdown.AbsoluteSize.X + 5,
+                    0, dropdown.AbsolutePosition.Y
+                )
+                dropdownContainer.Position = dropdownPos
+                dropdownContainer.Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
+                dropdownContainer.Visible = true
+                
+                -- Animate opening
+                local openTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
+                    Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, #options * 30)
+                })
+                openTween:Play()
+                
+                -- Rotate arrow
+                local arrowTween = TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 180})
+                arrowTween:Play()
             else
-                container.Size = UDim2.new(1, 0, 0, 0)
+                -- Animate closing
+                local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
+                    Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
+                })
+                closeTween:Play()
+                
+                closeTween.Completed:Connect(function()
+                    dropdownContainer.Visible = false
+                end)
+                
+                -- Rotate arrow back
+                local arrowTween = TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 0})
+                arrowTween:Play()
             end
-            container.Visible = open
         end)
+        
+        -- Close dropdown when clicking outside
+        local function closeDropdown(input)
+            if open and input.UserInputType == Enum.UserInputType.MouseButton1 then
+                local isInDropdown = dropdownContainer.AbsolutePosition.X <= input.Position.X and input.Position.X <= dropdownContainer.AbsolutePosition.X + dropdownContainer.AbsoluteSize.X and
+                                   dropdownContainer.AbsolutePosition.Y <= input.Position.Y and input.Position.Y <= dropdownContainer.AbsolutePosition.Y + dropdownContainer.AbsoluteSize.Y
+                
+                local isInButton = dropdown.AbsolutePosition.X <= input.Position.X and input.Position.X <= dropdown.AbsolutePosition.X + dropdown.AbsoluteSize.X and
+                                 dropdown.AbsolutePosition.Y <= input.Position.Y and input.Position.Y <= dropdown.AbsolutePosition.Y + dropdown.AbsoluteSize.Y
+                
+                if not isInDropdown and not isInButton then
+                    open = false
+                    local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
+                        Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
+                    })
+                    closeTween:Play()
+                    
+                    closeTween.Completed:Connect(function()
+                        dropdownContainer.Visible = false
+                    end)
+                    
+                    local arrowTween = TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 0})
+                    arrowTween:Play()
+                end
+            end
+        end
+        
+        UserInputService.InputBegan:Connect(closeDropdown)
     end
     
     function window:Slider(text, min, max, default, callback)
         local slider = Instance.new("Frame")
         local track = Instance.new("Frame")
+        local trackCorner = Instance.new("UICorner")
         local fill = Instance.new("Frame")
+        local fillCorner = Instance.new("UICorner")
         local handle = Instance.new("TextButton")
+        local handleCorner = Instance.new("UICorner")
         local valueLabel = Instance.new("TextLabel")
         
-        slider.Size = UDim2.new(1, 0, 0, 50)
+        slider.Size = UDim2.new(1, 0, 0, 60)
         slider.BackgroundTransparency = 1
         slider.Parent = self.container
         
@@ -180,20 +515,30 @@ function Library:CreateWindow(name)
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Parent = slider
         
-        track.Size = UDim2.new(1, 0, 0, 5)
-        track.Position = UDim2.new(0, 0, 0, 30)
+        track.Size = UDim2.new(1, 0, 0, 6)
+        track.Position = UDim2.new(0, 0, 0, 35)
         track.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         track.Parent = slider
+        
+        trackCorner.CornerRadius = UDim.new(0, 3)
+        trackCorner.Parent = track
         
         fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
         fill.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
         fill.Parent = track
         
-        handle.Size = UDim2.new(0, 15, 0, 15)
-        handle.Position = UDim2.new((default - min) / (max - min), -7, 0.5, -7)
+        fillCorner.CornerRadius = UDim.new(0, 3)
+        fillCorner.Parent = fill
+        
+        handle.Size = UDim2.new(0, 20, 0, 20)
+        handle.Position = UDim2.new((default - min) / (max - min), -10, 0.5, -10)
         handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         handle.Text = ""
+        handle.AutoButtonColor = false
         handle.Parent = slider
+        
+        handleCorner.CornerRadius = UDim.new(0, 10)
+        handleCorner.Parent = handle
         
         valueLabel.Size = UDim2.new(0, 50, 0, 20)
         valueLabel.Position = UDim2.new(1, -50, 0, 0)
@@ -208,24 +553,55 @@ function Library:CreateWindow(name)
         
         local function update(value)
             value = math.clamp(value, min, max)
-            fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
-            handle.Position = UDim2.new((value - min) / (max - min), -7, 0.5, -7)
+            local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            
+            local fillTween = TweenService:Create(fill, tweenInfo, {
+                Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+            })
+            local handleTween = TweenService:Create(handle, tweenInfo, {
+                Position = UDim2.new((value - min) / (max - min), -10, 0.5, -10)
+            })
+            
+            fillTween:Play()
+            handleTween:Play()
+            
             valueLabel.Text = tostring(math.floor(value))
             callback(value)
         end
         
         handle.MouseButton1Down:Connect(function()
             dragging = true
+            
+            -- Animate handle scale on click
+            local scaleTween = TweenService:Create(handle, TweenInfo.new(0.1), {
+                Size = UDim2.new(0, 24, 0, 24)
+            })
+            scaleTween:Play()
         end)
         
         game:GetService("UserInputService").InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if dragging then
+                    -- Animate handle scale back
+                    local scaleTween = TweenService:Create(handle, TweenInfo.new(0.1), {
+                        Size = UDim2.new(0, 20, 0, 20)
+                    })
+                    scaleTween:Play()
+                end
                 dragging = false
             end
         end)
         
         game:GetService("UserInputService").InputChanged:Connect(function(input)
             if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local relativeX = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+                update(min + (max - min) * relativeX)
+            end
+        end)
+        
+        -- Also allow clicking on track to set value
+        track.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
                 local relativeX = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
                 update(min + (max - min) * relativeX)
             end
