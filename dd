@@ -478,4 +478,4 @@ function UILibrary:AddTab(tabName)
     return tab
 end
 
-return UILibrary
+return UILibrary:New("UI Library")
