@@ -467,14 +467,10 @@ function Library:CreateWindow(name)
         local connection
         
         -- Function to update position and size
+        -- Function to update position
         local function updateDropdownPosition()
-            local width = dropdown.AbsoluteSize.X
-            if width == 0 then
-                width = 200
-            end
-            local height = #options * 30
-            dropdownContainer.Position = UDim2.new(0, window.mainFrame.AbsolutePosition.X + window.mainFrame.AbsoluteSize.X + 5, 0, dropdown.AbsolutePosition.Y)
-            dropdownContainer.Size = UDim2.new(0, width, 0, height)
+            -- Position the container directly below the dropdown button
+            dropdownContainer.Position = UDim2.new(0, dropdown.AbsolutePosition.X, 0, dropdown.AbsolutePosition.Y + dropdown.AbsoluteSize.Y)
         end
         
         -- Create option buttons
@@ -515,7 +511,7 @@ function Library:CreateWindow(name)
                 
                 -- Close dropdown with animation
                 local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(dropdownContainer.Size.X, 0, 0, 0)
+                    Size = UDim2.new(dropdownContainer.Size.X.Scale, dropdownContainer.Size.X.Offset, 0, 0)
                 })
                 closeTween:Play()
                 
@@ -559,11 +555,18 @@ function Library:CreateWindow(name)
             open = not open
             
             if open then
-                updateDropdownPosition() -- This sets the container to its full, final size
-                local targetSize = dropdownContainer.Size -- Store the correct final size
+                -- Calculate size here instead of in the update function
+                local width = dropdown.AbsoluteSize.X
+                if width == 0 then
+                    width = 200 -- Fallback width
+                end
+                local height = #options * 30
+                local targetSize = UDim2.new(0, width, 0, height)
+
+                updateDropdownPosition() -- This now ONLY sets the position
                 
                 -- Set the height to 0 to animate *from*
-                dropdownContainer.Size = UDim2.new(targetSize.X.Scale, targetSize.X.Offset, 0, 0)
+                dropdownContainer.Size = UDim2.new(0, width, 0, 0) -- Use calculated width
                 dropdownContainer.Visible = true
                 
                 -- Animate opening
@@ -581,7 +584,7 @@ function Library:CreateWindow(name)
             else
                 -- Animate closing
                 local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(dropdownContainer.Size.X, 0, 0, 0)
+                    Size = UDim2.new(dropdownContainer.Size.X.Scale, dropdownContainer.Size.X.Offset, 0, 0)
                 })
                 closeTween:Play()
                 
@@ -620,7 +623,7 @@ function Library:CreateWindow(name)
                 if not isInDropdown then
                     open = false
                     local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                        Size = UDim2.new(dropdownContainer.Size.X, 0, 0, 0)
+                        Size = UDim2.new(dropdownContainer.Size.X.Scale, dropdownContainer.Size.X.Offset, 0, 0)
                     })
                     closeTween:Play()
                     
