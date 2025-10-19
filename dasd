@@ -2,6 +2,14 @@
 local Library = {}
 Library.__index = Library
 
+-- Section metatable
+local Section = {}
+Section.__index = Section
+
+-- Toggle metatable
+local Toggle = {}
+Toggle.__index = Toggle
+
 -- Colors
 local accentColor = Color3.fromRGB(0, 85, 255)
 local backgroundColor = Color3.fromRGB(30, 30, 35)
@@ -114,7 +122,10 @@ end
 
 -- Add tab method
 function Library:AddTab(name)
-    local tab = {}
+    local tab = {
+        Name = name,
+        Sections = {}
+    }
     setmetatable(tab, Library)
     
     -- Create tab button
@@ -123,7 +134,7 @@ function Library:AddTab(name)
     tabButton.Size = UDim2.new(0, 80, 1, 0)
     tabButton.BackgroundTransparency = 1
     tabButton.Text = name
-    tabButton.TextColor3 = textColor
+    tabButton.TextColor3 = Color3.fromRGB(200, 200, 200)
     tabButton.TextSize = 14
     tabButton.Font = Enum.Font.Gotham
     tabButton.Parent = self.TabContainer
@@ -143,7 +154,6 @@ function Library:AddTab(name)
 
     tab.Button = tabButton
     tab.Content = tabContent
-    tab.Sections = {}
 
     -- Tab selection logic
     tabButton.MouseButton1Click:Connect(function()
@@ -173,7 +183,11 @@ end
 
 -- Add section to tab
 function Library:AddSection(name)
-    local section = {}
+    local section = {
+        Name = name,
+        Elements = {}
+    }
+    setmetatable(section, Section)
     
     local sectionFrame = Instance.new("Frame")
     sectionFrame.Name = name .. "Section"
@@ -220,18 +234,19 @@ function Library:AddSection(name)
 
     section.Frame = sectionFrame
     section.ElementsContainer = elementsContainer
-    self.Sections = self.Sections or {}
+    
     table.insert(self.Sections, section)
     
     return section
 end
 
 -- Add toggle to section
-function Library:AddNewToggle(name)
+function Section:AddNewToggle(name)
     local toggle = {
         Value = false,
         Callbacks = {}
     }
+    setmetatable(toggle, Toggle)
     
     local toggleFrame = Instance.new("Frame")
     toggleFrame.Name = name .. "Toggle"
@@ -301,11 +316,14 @@ function Library:AddNewToggle(name)
 
     updateToggle()
 
-    function toggle:OnChanged(callback)
-        table.insert(self.Callbacks, callback)
-    end
-
+    table.insert(self.Elements, toggle)
     return toggle
+end
+
+-- Toggle callback method
+function Toggle:OnChanged(callback)
+    table.insert(self.Callbacks, callback)
+    return self
 end
 
 -- Initialize the library
