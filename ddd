@@ -1,7 +1,7 @@
 --[[
     Enhanced GUI Library with Tabs Example Usage:
     local ui = loadstring(game:HttpGet("URL_TO_THIS_SCRIPT"))()
-    local window = ui:CreateWindow("My GUI")
+    local window = ui:CreateWindow("My Awesome GUI")
     
     local mainTab = window:Tab("Main")
     mainTab:Button("Button", function()
@@ -115,6 +115,51 @@ function Library:CreateWindow(name)
     resizeCorner.CornerRadius = UDim.new(0, 4)
     resizeCorner.Parent = resizeHandle
     
+    -- Mobile toggle button (top center of screen)
+    local mobileToggle = Instance.new("TextButton")
+    local mobileToggleCorner = Instance.new("UICorner")
+    
+    mobileToggle.Parent = screenGui
+    mobileToggle.Size = UDim2.new(0, 120, 0, 40)
+    mobileToggle.Position = UDim2.new(0.5, -60, 0, 10)
+    mobileToggle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    mobileToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    mobileToggle.Text = "Toggle GUI"
+    mobileToggle.Font = Enum.Font.GothamSemibold
+    mobileToggle.TextSize = 14
+    mobileToggle.AutoButtonColor = false
+    mobileToggle.ZIndex = 10
+    
+    mobileToggleCorner.CornerRadius = UDim.new(0, 8)
+    mobileToggleCorner.Parent = mobileToggle
+    
+    -- Mobile button hover animation
+    mobileToggle.MouseEnter:Connect(function()
+        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(mobileToggle, tweenInfo, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)})
+        tween:Play()
+    end)
+    
+    mobileToggle.MouseLeave:Connect(function()
+        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(mobileToggle, tweenInfo, {BackgroundColor3 = Color3.fromRGB(30, 30, 30)})
+        tween:Play()
+    end)
+    
+    mobileToggle.MouseButton1Click:Connect(function()
+        frame.Visible = not frame.Visible
+        mobileToggle.Text = frame.Visible and "Hide GUI" or "Show GUI"
+    end)
+    
+    -- Hide keybind (Right Control)
+    local hideKeybind = Enum.KeyCode.RightControl
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == hideKeybind then
+            frame.Visible = not frame.Visible
+            mobileToggle.Text = frame.Visible and "Hide GUI" or "Show GUI"
+        end
+    end)
+    
     -- Dragging functionality
     local dragging = false
     local dragInput
@@ -193,7 +238,8 @@ function Library:CreateWindow(name)
         mainFrame = frame,
         tabs = {},
         currentTab = nil,
-        tabContainer = tabContainer
+        tabContainer = tabContainer,
+        screenGui = screenGui
     }
     
     -- Tab metatable
@@ -353,13 +399,13 @@ function Library:CreateWindow(name)
         local containerLayout = Instance.new("UIListLayout")
         local containerShadow = Instance.new("ImageLabel")
         
-        dropdownContainer.Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
+        dropdownContainer.Size = UDim2.new(1, 0, 0, 0)
         dropdownContainer.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
         dropdownContainer.BorderSizePixel = 0
         dropdownContainer.ClipsDescendants = true
         dropdownContainer.Visible = false
         dropdownContainer.ZIndex = 5
-        dropdownContainer.Parent = screenGui
+        dropdownContainer.Parent = dropdown
         
         containerCorner.CornerRadius = UDim.new(0, 6)
         containerCorner.Parent = dropdownContainer
@@ -417,7 +463,7 @@ function Library:CreateWindow(name)
                 
                 -- Close dropdown with animation
                 local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
+                    Size = UDim2.new(1, 0, 0, 0)
                 })
                 closeTween:Play()
                 
@@ -452,20 +498,14 @@ function Library:CreateWindow(name)
             open = not open
             
             if open then
-                -- Position dropdown container next to main GUI - FIXED POSITIONING
-                local absolutePos = dropdown.AbsolutePosition
-                local absoluteSize = dropdown.AbsoluteSize
-                
-                dropdownContainer.Position = UDim2.new(
-                    0, absolutePos.X + absoluteSize.X + 5,
-                    0, absolutePos.Y
-                )
-                dropdownContainer.Size = UDim2.new(0, absoluteSize.X, 0, 0)
+                -- Position dropdown container below the dropdown button
+                dropdownContainer.Position = UDim2.new(0, 0, 1, 5)
+                dropdownContainer.Size = UDim2.new(1, 0, 0, 0)
                 dropdownContainer.Visible = true
                 
                 -- Animate opening
                 local openTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(0, absoluteSize.X, 0, #options * 30)
+                    Size = UDim2.new(1, 0, 0, #options * 30)
                 })
                 openTween:Play()
                 
@@ -475,7 +515,7 @@ function Library:CreateWindow(name)
             else
                 -- Animate closing
                 local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
+                    Size = UDim2.new(1, 0, 0, 0)
                 })
                 closeTween:Play()
                 
@@ -501,7 +541,7 @@ function Library:CreateWindow(name)
                 if not isInDropdown and not isInButton then
                     open = false
                     local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                        Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
+                        Size = UDim2.new(1, 0, 0, 0)
                     })
                     closeTween:Play()
                     
@@ -636,6 +676,13 @@ function Library:CreateWindow(name)
     end
     
     function window:Tab(name)
+        -- Check if tab already exists
+        for _, existingTab in ipairs(self.tabs) do
+            if existingTab.name == name then
+                return existingTab
+            end
+        end
+        
         local tabButton = Instance.new("TextButton")
         local tabCorner = Instance.new("UICorner")
         local tabContainer = Instance.new("ScrollingFrame")
@@ -720,12 +767,13 @@ function Library:CreateWindow(name)
         self.currentTab = tab
     end
     
-    -- Create built-in settings tab
+    -- Create built-in settings tab (only if it doesn't exist)
     local settingsTab = window:Tab("Settings")
     
     -- Add settings options
     settingsTab:Button("Hide GUI", function()
         frame.Visible = not frame.Visible
+        mobileToggle.Text = frame.Visible and "Hide GUI" or "Show GUI"
     end)
     
     settingsTab:Button("Destroy GUI", function()
@@ -742,8 +790,10 @@ function Library:CreateWindow(name)
         print("UI Sounds:", state)
     end)
     
-    -- Create a default main tab
-    local mainTab = window:Tab("Main")
+    settingsTab:Button("Change Hide Keybind", function()
+        -- Keybind changing functionality can be added here
+        print("Keybind change button clicked!")
+    end)
     
     return window
 end
