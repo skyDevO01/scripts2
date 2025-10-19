@@ -294,6 +294,10 @@ function UILibrary:AddTab(tabName)
 
         sectionFrame.Parent = string.lower(side) == "left" and tab.Left or tab.Right
 
+        sectionList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            sectionFrame.Size = UDim2.new(1, 0, 0, sectionList.AbsoluteContentSize.Y + sectionContentPadding.PaddingTop.Offset + sectionContentPadding.PaddingBottom.Offset)
+        end)
+
         function section:AddLabel(text)
             local label = Instance.new("TextLabel")
             label.Size = UDim2.new(1, 0, 0, 20)
