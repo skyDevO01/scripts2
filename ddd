@@ -1,21 +1,22 @@
 --[[
-    Enhanced GUI Library Example Usage:
+    Enhanced GUI Library with Tabs Example Usage:
     local ui = loadstring(game:HttpGet("URL_TO_THIS_SCRIPT"))()
     local window = ui:CreateWindow("My GUI")
     
-    window:Button("Button", function()
+    local mainTab = window:Tab("Main")
+    mainTab:Button("Button", function()
         print("Button clicked!")
     end)
     
-    window:Toggle("Toggle", false, function(state)
+    mainTab:Toggle("Toggle", false, function(state)
         print("Toggle state:", state)
     end)
     
-    window:Dropdown("Dropdown", {"Option 1", "Option 2", "Option 3"}, function(selected)
+    mainTab:Dropdown("Dropdown", {"Option 1", "Option 2", "Option 3"}, function(selected)
         print("Selected:", selected)
     end)
     
-    window:Slider("Slider", 0, 100, 50, function(value)
+    mainTab:Slider("Slider", 0, 100, 50, function(value)
         print("Slider value:", value)
     end)
 ]]
@@ -34,14 +35,17 @@ function Library:CreateWindow(name)
     local uiListLayout = Instance.new("UIListLayout")
     local title = Instance.new("TextLabel")
     local resizeHandle = Instance.new("Frame")
+    local tabContainer = Instance.new("Frame")
+    local tabListLayout = Instance.new("UIListLayout")
     
     screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
     screenGui.Name = "LibraryGui"
     screenGui.ResetOnSpawn = false
     
+    -- Larger default size
     frame.Parent = screenGui
-    frame.Size = UDim2.new(0, 250, 0, 350)
-    frame.Position = UDim2.new(0.5, -125, 0.5, -175)
+    frame.Size = UDim2.new(0, 350, 0, 450)
+    frame.Position = UDim2.new(0.5, -175, 0.5, -225)
     frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     frame.BorderSizePixel = 0
     frame.ClipsDescendants = true
@@ -77,10 +81,23 @@ function Library:CreateWindow(name)
     titleCorner.CornerRadius = UDim.new(0, 8)
     titleCorner.Parent = title
     
+    -- Tab container
+    tabContainer.Parent = frame
+    tabContainer.Size = UDim2.new(1, -10, 0, 35)
+    tabContainer.Position = UDim2.new(0, 5, 0, 40)
+    tabContainer.BackgroundTransparency = 1
+    
+    tabListLayout.Parent = tabContainer
+    tabListLayout.FillDirection = Enum.FillDirection.Horizontal
+    tabListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    tabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    tabListLayout.Padding = UDim.new(0, 5)
+    
     container.Parent = frame
-    container.Size = UDim2.new(1, -10, 1, -50)
-    container.Position = UDim2.new(0, 5, 0, 40)
+    container.Size = UDim2.new(1, -10, 1, -90)
+    container.Position = UDim2.new(0, 5, 0, 80)
     container.BackgroundTransparency = 1
+    container.ClipsDescendants = true
     
     uiListLayout.Parent = container
     uiListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -159,9 +176,9 @@ function Library:CreateWindow(name)
             local delta = input.Position - resizeStart
             local newSize = UDim2.new(
                 startSize.X.Scale, 
-                math.max(200, startSize.X.Offset + delta.X),
+                math.max(300, startSize.X.Offset + delta.X),
                 startSize.Y.Scale, 
-                math.max(150, startSize.Y.Offset + delta.Y)
+                math.max(250, startSize.Y.Offset + delta.Y)
             )
             
             -- Animate resize
@@ -171,11 +188,19 @@ function Library:CreateWindow(name)
         end
     end)
     
-    local window = {}
-    window.container = container
-    window.mainFrame = frame
-
-    function window:Button(text, callback)
+    local window = {
+        container = container,
+        mainFrame = frame,
+        tabs = {},
+        currentTab = nil,
+        tabContainer = tabContainer
+    }
+    
+    -- Tab metatable
+    local Tab = {}
+    Tab.__index = Tab
+    
+    function Tab:Button(text, callback)
         local button = Instance.new("TextButton")
         local buttonCorner = Instance.new("UICorner")
         
@@ -220,7 +245,7 @@ function Library:CreateWindow(name)
         end)
     end
     
-    function window:Toggle(text, default, callback)
+    function Tab:Toggle(text, default, callback)
         local toggle = Instance.new("TextButton")
         local toggleCorner = Instance.new("UICorner")
         local status = Instance.new("Frame")
@@ -297,7 +322,7 @@ function Library:CreateWindow(name)
         end)
     end
     
-    function window:Dropdown(text, options, callback)
+    function Tab:Dropdown(text, options, callback)
         local dropdown = Instance.new("TextButton")
         local dropdownCorner = Instance.new("UICorner")
         local arrow = Instance.new("ImageLabel")
@@ -427,18 +452,20 @@ function Library:CreateWindow(name)
             open = not open
             
             if open then
-                -- Position dropdown container next to main GUI
-                local dropdownPos = UDim2.new(
-                    0, dropdown.AbsolutePosition.X + dropdown.AbsoluteSize.X + 5,
-                    0, dropdown.AbsolutePosition.Y
+                -- Position dropdown container next to main GUI - FIXED POSITIONING
+                local absolutePos = dropdown.AbsolutePosition
+                local absoluteSize = dropdown.AbsoluteSize
+                
+                dropdownContainer.Position = UDim2.new(
+                    0, absolutePos.X + absoluteSize.X + 5,
+                    0, absolutePos.Y
                 )
-                dropdownContainer.Position = dropdownPos
-                dropdownContainer.Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
+                dropdownContainer.Size = UDim2.new(0, absoluteSize.X, 0, 0)
                 dropdownContainer.Visible = true
                 
                 -- Animate opening
                 local openTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, #options * 30)
+                    Size = UDim2.new(0, absoluteSize.X, 0, #options * 30)
                 })
                 openTween:Play()
                 
@@ -491,7 +518,7 @@ function Library:CreateWindow(name)
         UserInputService.InputBegan:Connect(closeDropdown)
     end
     
-    function window:Slider(text, min, max, default, callback)
+    function Tab:Slider(text, min, max, default, callback)
         local slider = Instance.new("Frame")
         local track = Instance.new("Frame")
         local trackCorner = Instance.new("UICorner")
@@ -607,6 +634,116 @@ function Library:CreateWindow(name)
             end
         end)
     end
+    
+    function window:Tab(name)
+        local tabButton = Instance.new("TextButton")
+        local tabCorner = Instance.new("UICorner")
+        local tabContainer = Instance.new("ScrollingFrame")
+        local tabLayout = Instance.new("UIListLayout")
+        
+        -- Create tab button
+        tabButton.Size = UDim2.new(0, 80, 0, 30)
+        tabButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        tabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        tabButton.Text = name
+        tabButton.Font = Enum.Font.Gotham
+        tabButton.TextSize = 14
+        tabButton.AutoButtonColor = false
+        tabButton.Parent = self.tabContainer
+        
+        tabCorner.CornerRadius = UDim.new(0, 6)
+        tabCorner.Parent = tabButton
+        
+        -- Create tab container
+        tabContainer.Size = UDim2.new(1, 0, 1, 0)
+        tabContainer.BackgroundTransparency = 1
+        tabContainer.BorderSizePixel = 0
+        tabContainer.ScrollBarThickness = 4
+        tabContainer.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+        tabContainer.Visible = false
+        tabContainer.Parent = self.container
+        
+        tabLayout.Parent = tabContainer
+        tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        tabLayout.Padding = UDim.new(0, 8)
+        
+        -- Create tab object
+        local tab = setmetatable({
+            name = name,
+            container = tabContainer,
+            button = tabButton,
+            isActive = false
+        }, Tab)
+        
+        -- Tab switching logic
+        tabButton.MouseButton1Click:Connect(function()
+            self:SwitchTab(tab)
+        end)
+        
+        -- Add to window tabs
+        table.insert(self.tabs, tab)
+        
+        -- If this is the first tab, make it active
+        if #self.tabs == 1 then
+            self:SwitchTab(tab)
+        end
+        
+        return tab
+    end
+    
+    function window:SwitchTab(tab)
+        -- Deactivate all tabs
+        for _, otherTab in ipairs(self.tabs) do
+            otherTab.container.Visible = false
+            otherTab.isActive = false
+            
+            -- Animate tab button deactivation
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(otherTab.button, tweenInfo, {
+                BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            })
+            tween:Play()
+        end
+        
+        -- Activate selected tab
+        tab.container.Visible = true
+        tab.isActive = true
+        
+        -- Animate tab button activation
+        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(tab.button, tweenInfo, {
+            BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+        })
+        tween:Play()
+        
+        self.currentTab = tab
+    end
+    
+    -- Create built-in settings tab
+    local settingsTab = window:Tab("Settings")
+    
+    -- Add settings options
+    settingsTab:Button("Hide GUI", function()
+        frame.Visible = not frame.Visible
+    end)
+    
+    settingsTab:Button("Destroy GUI", function()
+        screenGui:Destroy()
+    end)
+    
+    settingsTab:Toggle("Watermark", true, function(state)
+        -- Watermark functionality can be added here
+        print("Watermark:", state)
+    end)
+    
+    settingsTab:Toggle("UI Sound Effects", true, function(state)
+        -- Sound effects toggle
+        print("UI Sounds:", state)
+    end)
+    
+    -- Create a default main tab
+    local mainTab = window:Tab("Main")
     
     return window
 end
