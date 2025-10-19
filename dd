@@ -1,9 +1,3 @@
---[[
-	Simple GUI Library
-	Description: A library for creating clean and interactive GUIs in Roblox.
-	Author: Gemini
---]]
-
 local Library = {}
 Library.__index = Library
 
