@@ -1,31 +1,73 @@
--- Simple Roblox GUI Library
+-- Advanced Roblox GUI Library with Animations, Tabs, Resizable, Settings Tab, and Animated Loading
 -- Load with: local ui = loadstring(game:HttpGet("your_url_here"))()
 -- Usage: local window = ui:CreateWindow("My GUI")
--- window:AddToggle("Toggle Example", function(value) print(value) end)
--- window:AddButton("Button Example", function() print("Clicked") end)
--- window:AddSlider("Slider Example", 0, 100, 50, function(value) print(value) end)
--- window:AddDropdown("Dropdown Example", {"Option1", "Option2"}, function(selected) print(selected) end)
+-- window:AddTab("Tab1")
+-- window:AddToggle("Tab1", "Toggle Example", function(value) print(value) end)
+-- window:AddButton("Tab1", "Button Example", function() print("Clicked") end)
+-- window:AddSlider("Tab1", "Slider Example", 0, 100, 50, function(value) print(value) end)
+-- window:AddDropdown("Tab1", "Dropdown Example", {"Option1", "Option2"}, function(selected) print(selected) end)
 
 local Library = {}
 Library.__index = Library
 
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local RunService = game:GetService("RunService")
+
+-- Default settings
+local Settings = {
+    ToggleKey = Enum.KeyCode.RightControl
+}
 
 function Library:CreateWindow(title)
     local self = setmetatable({}, Library)
     
+    self.Tabs = {}
+    self.CurrentTab = nil
+    self.Visible = true
+    self.Loading = true
+    
+    -- Animated Loading UI
+    self.LoadingGui = Instance.new("ScreenGui")
+    self.LoadingGui.Name = "LoadingGUI"
+    self.LoadingGui.Parent = PlayerGui
+    self.LoadingGui.ResetOnSpawn = false
+    
+    local LoadingFrame = Instance.new("Frame")
+    LoadingFrame.Size = UDim2.new(0, 200, 0, 50)
+    LoadingFrame.Position = UDim2.new(0.5, -100, 0.5, -25)
+    LoadingFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    LoadingFrame.Parent = self.LoadingGui
+    
+    local LoadingText = Instance.new("TextLabel")
+    LoadingText.Size = UDim2.new(1, 0, 1, 0)
+    LoadingText.BackgroundTransparency = 1
+    LoadingText.Text = "Loading..."
+    LoadingText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LoadingText.TextSize = 18
+    LoadingText.Font = Enum.Font.SourceSansBold
+    LoadingText.Parent = LoadingFrame
+    
+    -- Animate loading
+    local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true)
+    TweenService:Create(LoadingText, tweenInfo, {TextTransparency = 0.5}):Play()
+    
+    -- Main GUI
     self.ScreenGui = Instance.new("ScreenGui")
-    self.ScreenGui.Name = "SimpleGUILib"
+    self.ScreenGui.Name = "AdvancedGUILib"
     self.ScreenGui.Parent = PlayerGui
     self.ScreenGui.ResetOnSpawn = false
+    self.ScreenGui.Enabled = false  -- Start hidden until loading done
     
     self.MainFrame = Instance.new("Frame")
-    self.MainFrame.Size = UDim2.new(0, 300, 0, 400)
-    self.MainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
+    self.MainFrame.Size = UDim2.new(0, 400, 0, 500)
+    self.MainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
     self.MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     self.MainFrame.BorderSizePixel = 0
+    self.MainFrame.ClipsDescendants = true
     self.MainFrame.Parent = self.ScreenGui
     
     local TitleLabel = Instance.new("TextLabel")
@@ -37,29 +79,57 @@ function Library:CreateWindow(title)
     TitleLabel.Font = Enum.Font.SourceSansBold
     TitleLabel.Parent = self.MainFrame
     
-    local UIListLayout = Instance.new("UIListLayout")
-    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    UIListLayout.Padding = UDim.new(0, 5)
-    UIListLayout.Parent = self.MainFrame
+    self.TabButtonsFrame = Instance.new("Frame")
+    self.TabButtonsFrame.Size = UDim2.new(1, 0, 0, 30)
+    self.TabButtonsFrame.Position = UDim2.new(0, 0, 0, 30)
+    self.TabButtonsFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    self.TabButtonsFrame.Parent = self.MainFrame
     
-    self.ElementsContainer = Instance.new("ScrollingFrame")
-    self.ElementsContainer.Size = UDim2.new(1, 0, 1, -30)
-    self.ElementsContainer.BackgroundTransparency = 1
-    self.ElementsContainer.BorderSizePixel = 0
-    self.ElementsContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
-    self.ElementsContainer.ScrollBarThickness = 6
-    self.ElementsContainer.Parent = self.MainFrame
+    local TabButtonsLayout = Instance.new("UIListLayout")
+    TabButtonsLayout.FillDirection = Enum.FillDirection.Horizontal
+    TabButtonsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    TabButtonsLayout.Padding = UDim.new(0, 5)
+    TabButtonsLayout.Parent = self.TabButtonsFrame
     
-    local ElementsListLayout = Instance.new("UIListLayout")
-    ElementsListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    ElementsListLayout.Padding = UDim.new(0, 5)
-    ElementsListLayout.Parent = self.ElementsContainer
+    self.TabContainer = Instance.new("Frame")
+    self.TabContainer.Size = UDim2.new(1, 0, 1, -60)
+    self.TabContainer.Position = UDim2.new(0, 0, 0, 60)
+    self.TabContainer.BackgroundTransparency = 1
+    self.TabContainer.Parent = self.MainFrame
     
-    ElementsListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        self.ElementsContainer.CanvasSize = UDim2.new(0, 0, 0, ElementsListLayout.AbsoluteContentSize.Y + 10)
+    -- Resizer
+    local Resizer = Instance.new("Frame")
+    Resizer.Size = UDim2.new(0, 10, 0, 10)
+    Resizer.Position = UDim2.new(1, -10, 1, -10)
+    Resizer.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+    Resizer.Parent = self.MainFrame
+    
+    local resizing = false
+    local resizeStartPos
+    local resizeStartSize
+    
+    Resizer.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            resizing = true
+            resizeStartPos = input.Position
+            resizeStartSize = self.MainFrame.Size
+        end
     end)
     
-    -- Make draggable
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            resizing = false
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - resizeStartPos
+            self.MainFrame.Size = UDim2.new(0, math.max(200, resizeStartSize.X.Offset + delta.X), 0, math.max(200, resizeStartSize.Y.Offset + delta.Y))
+        end
+    end)
+    
+    -- Draggable
     local dragging
     local dragInput
     local dragStart
@@ -90,20 +160,125 @@ function Library:CreateWindow(title)
         end
     end)
     
-    game:GetService("UserInputService").InputChanged:Connect(function(input)
+    UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             update(input)
         end
     end)
     
+    -- Toggle visibility
+    UserInputService.InputBegan:Connect(function(input)
+        if input.KeyCode == Settings.ToggleKey then
+            self:ToggleVisibility()
+        end
+    end)
+    
+    -- Add Settings Tab
+    self:AddTab("Settings")
+    self:AddLabel("Settings", "GUI Settings")
+    self:AddKeybind("Settings", "Toggle Key", Settings.ToggleKey, function(key)
+        Settings.ToggleKey = key
+    end)
+    
+    -- Simulate loading
+    spawn(function()
+        wait(2)  -- Simulated load time
+        self.Loading = false
+        self.LoadingGui:Destroy()
+        self.ScreenGui.Enabled = true
+        self:AnimateOpen()
+    end)
+    
     return self
 end
 
-function Library:AddToggle(label, callback)
+function Library:AnimateOpen()
+    self.MainFrame.Size = UDim2.new(0, 400, 0, 0)
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(self.MainFrame, tweenInfo, {Size = UDim2.new(0, 400, 0, 500)}):Play()
+end
+
+function Library:ToggleVisibility()
+    self.Visible = not self.Visible
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+    if self.Visible then
+        self.MainFrame.Visible = true
+        TweenService:Create(self.MainFrame, tweenInfo, {Size = UDim2.new(0, self.MainFrame.Size.X.Offset, 0, 500)}):Play()
+    else
+        TweenService:Create(self.MainFrame, tweenInfo, {Size = UDim2.new(0, self.MainFrame.Size.X.Offset, 0, 0)}):Play()
+        wait(0.3)
+        self.MainFrame.Visible = false
+    end
+end
+
+function Library:AddTab(tabName)
+    if self.Tabs[tabName] then return end
+    
+    local TabButton = Instance.new("TextButton")
+    TabButton.Size = UDim2.new(0, 100, 1, 0)
+    TabButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    TabButton.Text = tabName
+    TabButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TabButton.TextSize = 14
+    TabButton.Font = Enum.Font.SourceSans
+    TabButton.Parent = self.TabButtonsFrame
+    
+    local TabFrame = Instance.new("ScrollingFrame")
+    TabFrame.Size = UDim2.new(1, 0, 1, 0)
+    TabFrame.BackgroundTransparency = 1
+    TabFrame.BorderSizePixel = 0
+    TabFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    TabFrame.ScrollBarThickness = 6
+    TabFrame.Visible = false
+    TabFrame.Parent = self.TabContainer
+    
+    local ElementsListLayout = Instance.new("UIListLayout")
+    ElementsListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    ElementsListLayout.Padding = UDim.new(0, 5)
+    ElementsListLayout.Parent = TabFrame
+    
+    ElementsListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        TabFrame.CanvasSize = UDim2.new(0, 0, 0, ElementsListLayout.AbsoluteContentSize.Y + 10)
+    end)
+    
+    self.Tabs[tabName] = {Button = TabButton, Frame = TabFrame}
+    
+    TabButton.MouseButton1Click:Connect(function()
+        self:SwitchTab(tabName)
+    end)
+    
+    if not self.CurrentTab then
+        self:SwitchTab(tabName)
+    end
+end
+
+function Library:SwitchTab(tabName)
+    if self.CurrentTab == tabName then return end
+    
+    for name, tab in pairs(self.Tabs) do
+        tab.Frame.Visible = false
+        tab.Button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    end
+    
+    local tab = self.Tabs[tabName]
+    tab.Frame.Visible = true
+    tab.Button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    self.CurrentTab = tabName
+    
+    -- Animate switch
+    tab.Frame.Transparency = 1
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(tab.Frame, tweenInfo, {Transparency = 0}):Play()
+end
+
+function Library:AddToggle(tabName, label, callback)
+    self:AddTab(tabName)
+    local TabFrame = self.Tabs[tabName].Frame
+    
     local ToggleFrame = Instance.new("Frame")
     ToggleFrame.Size = UDim2.new(1, 0, 0, 30)
     ToggleFrame.BackgroundTransparency = 1
-    ToggleFrame.Parent = self.ElementsContainer
+    ToggleFrame.Parent = TabFrame
     
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(0.8, 0, 1, 0)
@@ -125,12 +300,16 @@ function Library:AddToggle(label, callback)
     local value = false
     ToggleButton.MouseButton1Click:Connect(function()
         value = not value
-        ToggleButton.BackgroundColor3 = value and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(50, 50, 50)
+        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        TweenService:Create(ToggleButton, tweenInfo, {BackgroundColor3 = value and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(50, 50, 50)}):Play()
         if callback then callback(value) end
     end)
 end
 
-function Library:AddButton(label, callback)
+function Library:AddButton(tabName, label, callback)
+    self:AddTab(tabName)
+    local TabFrame = self.Tabs[tabName].Frame
+    
     local Button = Instance.new("TextButton")
     Button.Size = UDim2.new(1, 0, 0, 30)
     Button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
@@ -138,18 +317,25 @@ function Library:AddButton(label, callback)
     Button.TextColor3 = Color3.fromRGB(255, 255, 255)
     Button.TextSize = 14
     Button.Font = Enum.Font.SourceSans
-    Button.Parent = self.ElementsContainer
+    Button.Parent = TabFrame
     
     Button.MouseButton1Click:Connect(function()
+        local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+        TweenService:Create(Button, tweenInfo, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)}):Play()
+        wait(0.1)
+        TweenService:Create(Button, tweenInfo, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)}):Play()
         if callback then callback() end
     end)
 end
 
-function Library:AddSlider(label, min, max, default, callback)
+function Library:AddSlider(tabName, label, min, max, default, callback)
+    self:AddTab(tabName)
+    local TabFrame = self.Tabs[tabName].Frame
+    
     local SliderFrame = Instance.new("Frame")
     SliderFrame.Size = UDim2.new(1, 0, 0, 40)
     SliderFrame.BackgroundTransparency = 1
-    SliderFrame.Parent = self.ElementsContainer
+    SliderFrame.Parent = TabFrame
     
     local Label = Instance.new("TextLabel")
     Label.Size = UDim2.new(1, 0, 0, 20)
@@ -174,7 +360,7 @@ function Library:AddSlider(label, min, max, default, callback)
     
     local ValueLabel = Instance.new("TextLabel")
     ValueLabel.Size = UDim2.new(0, 50, 1, 0)
-    ValueLabel.Position = UDim2.new(1, 0, 0, 0)
+    ValueLabel.Position = UDim2.new(1, 5, 0, 0)
     ValueLabel.BackgroundTransparency = 1
     ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     ValueLabel.TextSize = 14
@@ -196,11 +382,12 @@ function Library:AddSlider(label, min, max, default, callback)
         end
     end)
     
-    game:GetService("UserInputService").InputChanged:Connect(function(input)
+    UserInputService.InputChanged:Connect(function(input)
         if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
             local relativePos = math.clamp((input.Position.X - SliderBar.AbsolutePosition.X) / SliderBar.AbsoluteSize.X, 0, 1)
             value = math.floor(min + (max - min) * relativePos)
-            SliderFill.Size = UDim2.new(relativePos, 0, 1, 0)
+            local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            TweenService:Create(SliderFill, tweenInfo, {Size = UDim2.new(relativePos, 0, 1, 0)}):Play()
             ValueLabel.Text = tostring(value)
             if callback then callback(value) end
         end
@@ -211,14 +398,17 @@ function Library:AddSlider(label, min, max, default, callback)
     SliderFill.Size = UDim2.new(defaultPos, 0, 1, 0)
 end
 
-function Library:AddDropdown(label, options, callback)
+function Library:AddDropdown(tabName, label, options, callback)
+    self:AddTab(tabName)
+    local TabFrame = self.Tabs[tabName].Frame
+    
     local DropdownFrame = Instance.new("Frame")
     DropdownFrame.Size = UDim2.new(1, 0, 0, 30)
     DropdownFrame.BackgroundTransparency = 1
-    DropdownFrame.Parent = self.ElementsContainer
+    DropdownFrame.Parent = TabFrame
     
     local Label = Instance.new("TextLabel")
-    Label.Size = UDim2.new(1, 0, 1, 0)
+    Label.Size = UDim2.new(0.7, 0, 1, 0)
     Label.BackgroundTransparency = 1
     Label.Text = label or "Dropdown"
     Label.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -227,34 +417,32 @@ function Library:AddDropdown(label, options, callback)
     Label.TextXAlignment = Enum.TextXAlignment.Left
     Label.Parent = DropdownFrame
     
-    local Selected = Instance.new("TextLabel")
-    Selected.Size = UDim2.new(0, 100, 1, 0)
-    Selected.Position = UDim2.new(1, -105, 0, 0)
-    Selected.BackgroundTransparency = 1
-    Selected.Text = options[1] or "Select"
-    Selected.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Selected.TextSize = 14
-    Selected.Parent = DropdownFrame
-    
-    local DropButton = Instance.new("TextButton")
-    DropButton.Size = UDim2.new(1, 0, 1, 0)
-    DropButton.BackgroundTransparency = 1
-    DropButton.Text = ""
-    DropButton.Parent = DropdownFrame
+    local SelectedButton = Instance.new("TextButton")
+    SelectedButton.Size = UDim2.new(0.3, -5, 1, 0)
+    SelectedButton.Position = UDim2.new(0.7, 0, 0, 0)
+    SelectedButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    SelectedButton.Text = options[1] or "Select"
+    SelectedButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    SelectedButton.TextSize = 14
+    SelectedButton.Parent = DropdownFrame
     
     local OptionsFrame = Instance.new("Frame")
-    OptionsFrame.Size = UDim2.new(1, 0, 0, #options * 25)
-    OptionsFrame.Position = UDim2.new(0, 0, 1, 0)
+    OptionsFrame.Size = UDim2.new(0.3, -5, 0, 0)
+    OptionsFrame.Position = UDim2.new(0.7, 0, 1, 0)
     OptionsFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     OptionsFrame.Visible = false
+    OptionsFrame.ClipsDescendants = true
     OptionsFrame.Parent = DropdownFrame
     
     local OptionsList = Instance.new("UIListLayout")
     OptionsList.SortOrder = Enum.SortOrder.LayoutOrder
     OptionsList.Parent = OptionsFrame
     
-    DropButton.MouseButton1Click:Connect(function()
+    SelectedButton.MouseButton1Click:Connect(function()
         OptionsFrame.Visible = not OptionsFrame.Visible
+        local targetSize = OptionsFrame.Visible and UDim2.new(0.3, -5, 0, #options * 25) or UDim2.new(0.3, -5, 0, 0)
+        local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        TweenService:Create(OptionsFrame, tweenInfo, {Size = targetSize}):Play()
     end)
     
     for _, option in ipairs(options) do
@@ -267,11 +455,70 @@ function Library:AddDropdown(label, options, callback)
         OptionButton.Parent = OptionsFrame
         
         OptionButton.MouseButton1Click:Connect(function()
-            Selected.Text = option
+            SelectedButton.Text = option
             OptionsFrame.Visible = false
+            local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            TweenService:Create(OptionsFrame, tweenInfo, {Size = UDim2.new(0.3, -5, 0, 0)}):Play()
             if callback then callback(option) end
         end)
     end
+end
+
+function Library:AddLabel(tabName, text)
+    self:AddTab(tabName)
+    local TabFrame = self.Tabs[tabName].Frame
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, 0, 0, 30)
+    Label.BackgroundTransparency = 1
+    Label.Text = text or "Label"
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.TextSize = 14
+    Label.Font = Enum.Font.SourceSansBold
+    Label.Parent = TabFrame
+end
+
+function Library:AddKeybind(tabName, label, defaultKey, callback)
+    self:AddTab(tabName)
+    local TabFrame = self.Tabs[tabName].Frame
+    
+    local KeybindFrame = Instance.new("Frame")
+    KeybindFrame.Size = UDim2.new(1, 0, 0, 30)
+    KeybindFrame.BackgroundTransparency = 1
+    KeybindFrame.Parent = TabFrame
+    
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(0.8, 0, 1, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = label or "Keybind"
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.TextSize = 14
+    Label.Font = Enum.Font.SourceSans
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = KeybindFrame
+    
+    local KeyButton = Instance.new("TextButton")
+    KeyButton.Size = UDim2.new(0, 100, 1, 0)
+    KeyButton.Position = UDim2.new(1, -105, 0, 0)
+    KeyButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    KeyButton.Text = defaultKey.Name
+    KeyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    KeyButton.TextSize = 14
+    KeyButton.Parent = KeybindFrame
+    
+    local binding = false
+    KeyButton.MouseButton1Click:Connect(function()
+        binding = true
+        KeyButton.Text = "..."
+    end)
+    
+    UserInputService.InputBegan:Connect(function(input)
+        if binding and input.KeyCode ~= Enum.KeyCode.Unknown then
+            binding = false
+            KeyButton.Text = input.KeyCode.Name
+            if callback then callback(input.KeyCode) end
+        end
+    end)
 end
 
 return Library
