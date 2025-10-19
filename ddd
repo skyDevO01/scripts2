@@ -1,0 +1,238 @@
+--[[
+    GUI Library Example Usage:
+    local ui = loadstring(game:HttpGet("URL_TO_THIS_SCRIPT"))()
+    local window = ui:CreateWindow("My GUI")
+    
+    window:Button("Button", function()
+        print("Button clicked!")
+    end)
+    
+    window:Toggle("Toggle", false, function(state)
+        print("Toggle state:", state)
+    end)
+    
+    window:Dropdown("Dropdown", {"Option 1", "Option 2", "Option 3"}, function(selected)
+        print("Selected:", selected)
+    end)
+    
+    window:Slider("Slider", 0, 100, 50, function(value)
+        print("Slider value:", value)
+    end)
+]]
+
+local Library = {}
+Library.__index = Library
+
+function Library:CreateWindow(name)
+    local screenGui = Instance.new("ScreenGui")
+    local frame = Instance.new("Frame")
+    local container = Instance.new("Frame")
+    local uiListLayout = Instance.new("UIListLayout")
+    local title = Instance.new("TextLabel")
+    
+    screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    screenGui.Name = "LibraryGui"
+    
+    frame.Parent = screenGui
+    frame.Size = UDim2.new(0, 200, 0, 300)
+    frame.Position = UDim2.new(0.5, -100, 0.5, -150)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    
+    title.Parent = frame
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Text = name
+    title.Font = Enum.Font.Gotham
+    title.TextSize = 14
+    
+    container.Parent = frame
+    container.Size = UDim2.new(1, -10, 1, -40)
+    container.Position = UDim2.new(0, 5, 0, 35)
+    container.BackgroundTransparency = 1
+    
+    uiListLayout.Parent = container
+    uiListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    uiListLayout.Padding = UDim.new(0, 5)
+    
+    local window = {}
+    window.container = container
+    
+    function window:Button(text, callback)
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(1, 0, 0, 30)
+        button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        button.Text = text
+        button.Font = Enum.Font.Gotham
+        button.TextSize = 14
+        button.Parent = self.container
+        
+        button.MouseButton1Click:Connect(function()
+            callback()
+        end)
+    end
+    
+    function window:Toggle(text, default, callback)
+        local toggle = Instance.new("TextButton")
+        local status = Instance.new("Frame")
+        
+        toggle.Size = UDim2.new(1, 0, 0, 30)
+        toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        toggle.Text = ""
+        toggle.Parent = self.container
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0.7, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = toggle
+        
+        status.Size = UDim2.new(0, 20, 0, 20)
+        status.Position = UDim2.new(0.8, 0, 0.5, -10)
+        status.BackgroundColor3 = default and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+        status.Parent = toggle
+        
+        local current = default
+        
+        toggle.MouseButton1Click:Connect(function()
+            current = not current
+            status.BackgroundColor3 = current and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+            callback(current)
+        end)
+    end
+    
+    function window:Dropdown(text, options, callback)
+        local dropdown = Instance.new("TextButton")
+        local container = Instance.new("Frame")
+        local open = false
+        
+        dropdown.Size = UDim2.new(1, 0, 0, 30)
+        dropdown.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        dropdown.TextColor3 = Color3.fromRGB(255, 255, 255)
+        dropdown.Text = text
+        dropdown.Font = Enum.Font.Gotham
+        dropdown.TextSize = 14
+        dropdown.Parent = self.container
+        
+        container.Size = UDim2.new(1, 0, 0, 0)
+        container.Position = UDim2.new(0, 0, 1, 5)
+        container.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        container.Visible = false
+        container.Parent = dropdown
+        
+        local layout = Instance.new("UIListLayout")
+        layout.Parent = container
+        
+        for _, option in ipairs(options) do
+            local optionButton = Instance.new("TextButton")
+            optionButton.Size = UDim2.new(1, 0, 0, 25)
+            optionButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            optionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            optionButton.Text = option
+            optionButton.Font = Enum.Font.Gotham
+            optionButton.TextSize = 12
+            optionButton.Parent = container
+            
+            optionButton.MouseButton1Click:Connect(function()
+                callback(option)
+                dropdown.Text = text .. " : " .. option
+                container.Visible = false
+                open = false
+                container.Size = UDim2.new(1, 0, 0, 0)
+            end)
+        end
+        
+        dropdown.MouseButton1Click:Connect(function()
+            open = not open
+            if open then
+                container.Size = UDim2.new(1, 0, 0, #options * 25)
+            else
+                container.Size = UDim2.new(1, 0, 0, 0)
+            end
+            container.Visible = open
+        end)
+    end
+    
+    function window:Slider(text, min, max, default, callback)
+        local slider = Instance.new("Frame")
+        local track = Instance.new("Frame")
+        local fill = Instance.new("Frame")
+        local handle = Instance.new("TextButton")
+        local valueLabel = Instance.new("TextLabel")
+        
+        slider.Size = UDim2.new(1, 0, 0, 50)
+        slider.BackgroundTransparency = 1
+        slider.Parent = self.container
+        
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 0, 20)
+        label.BackgroundTransparency = 1
+        label.Text = text
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.Font = Enum.Font.Gotham
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.Parent = slider
+        
+        track.Size = UDim2.new(1, 0, 0, 5)
+        track.Position = UDim2.new(0, 0, 0, 30)
+        track.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        track.Parent = slider
+        
+        fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+        fill.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+        fill.Parent = track
+        
+        handle.Size = UDim2.new(0, 15, 0, 15)
+        handle.Position = UDim2.new((default - min) / (max - min), -7, 0.5, -7)
+        handle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        handle.Text = ""
+        handle.Parent = slider
+        
+        valueLabel.Size = UDim2.new(0, 50, 0, 20)
+        valueLabel.Position = UDim2.new(1, -50, 0, 0)
+        valueLabel.BackgroundTransparency = 1
+        valueLabel.Text = tostring(default)
+        valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        valueLabel.Font = Enum.Font.Gotham
+        valueLabel.TextSize = 14
+        valueLabel.Parent = slider
+        
+        local dragging = false
+        
+        local function update(value)
+            value = math.clamp(value, min, max)
+            fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+            handle.Position = UDim2.new((value - min) / (max - min), -7, 0.5, -7)
+            valueLabel.Text = tostring(math.floor(value))
+            callback(value)
+        end
+        
+        handle.MouseButton1Down:Connect(function()
+            dragging = true
+        end)
+        
+        game:GetService("UserInputService").InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+        
+        game:GetService("UserInputService").InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local relativeX = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+                update(min + (max - min) * relativeX)
+            end
+        end)
+    end
+    
+    return window
+end
+
+return Library
