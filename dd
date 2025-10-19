@@ -214,11 +214,11 @@ function UILibrary:AddTab(tabName)
     rightPadding.PaddingRight = UDim.new(0, 5)
     rightPadding.Parent = rightFrame
 
-    leftList:BindToPropertyChanged("AbsoluteContentSize", function()
+    leftList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         leftFrame.CanvasSize = UDim2.new(0, 0, 0, leftList.AbsoluteContentSize.Y + 10)
     end)
 
-    rightList:BindToPropertyChanged("AbsoluteContentSize", function()
+    rightList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         rightFrame.CanvasSize = UDim2.new(0, 0, 0, rightList.AbsoluteContentSize.Y + 10)
     end)
 
