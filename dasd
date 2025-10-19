@@ -1,0 +1,281 @@
+--[[
+    Simple Roblox GUI Library
+    Author: Gemini
+    Date: 2025-10-20
+
+    This library provides a simple and clean interface for creating GUIs in Roblox Luau.
+    It's designed to be loaded via loadstring for ease of use in various environments.
+
+    --// USAGE EXAMPLE //--
+    local ui = loadstring(game:HttpGet('YOUR_URL_HERE'))()
+
+    -- Create a new tab
+    local mainTab = ui:AddTab("Main")
+
+    -- Create a section within the tab
+    local playerSection = mainTab:AddSection('Player Mods')
+
+    -- Add a toggle switch to the section
+    local walkspeedToggle = playerSection:AddNewToggle('Fast Walk')
+
+    -- Connect a function to the toggle's state change
+    walkspeedToggle:OnChanged(function(value)
+        pcall(function()
+            local player = game:GetService("Players").LocalPlayer
+            local character = player.Character
+            if character and character:FindFirstChild("Humanoid") then
+                if value then
+                    -- The toggle is now ON
+                    character.Humanoid.WalkSpeed = 50
+                else
+                    -- The toggle is now OFF
+                    character.Humanoid.WalkSpeed = 16
+                end
+            end
+        end)
+    end)
+
+    local anotherSection = mainTab:AddSection("Visuals")
+    local espToggle = anotherSection:AddNewToggle("Enable ESP")
+    espToggle:OnChanged(function(value)
+        print("ESP Toggled:", value)
+    end)
+]]
+
+return function()
+    -- Prevent creating duplicate UIs if the script is run multiple times
+    if game:GetService("CoreGui"):FindFirstChild("GeminiGuiLib") then
+        game:GetService("CoreGui").GeminiGuiLib:Destroy()
+    end
+
+    --================--
+    -- CORE UI SETUP --
+    --================--
+
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "GeminiGuiLib"
+    screenGui.Parent = game:GetService("CoreGui")
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Parent = screenGui
+    mainFrame.Size = UDim2.new(0, 500, 0, 350)
+    mainFrame.Position = UDim2.new(0.5, -250, 0.5, -175)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
+    mainFrame.Draggable = true
+    mainFrame.Active = true
+
+    Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "TitleLabel"
+    titleLabel.Parent = mainFrame
+    titleLabel.Size = UDim2.new(1, 0, 0, 40)
+    titleLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    titleLabel.Text = "GUI Library"
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.Font = Enum.Font.SourceSansBold
+    titleLabel.TextSize = 18
+
+    Instance.new("UICorner", titleLabel).CornerRadius = UDim.new(0, 8)
+
+    -- Container for tab buttons
+    local tabContainer = Instance.new("Frame")
+    tabContainer.Name = "TabContainer"
+    tabContainer.Parent = mainFrame
+    tabContainer.Size = UDim2.new(0, 100, 1, -40)
+    tabContainer.Position = UDim2.new(0, 0, 0, 40)
+    tabContainer.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    tabContainer.BorderSizePixel = 0
+
+    local tabLayout = Instance.new("UIListLayout", tabContainer)
+    tabLayout.FillDirection = Enum.FillDirection.Vertical
+    tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    tabLayout.Padding = UDim.new(0, 5)
+
+    -- Container for the content of the selected tab
+    local contentContainer = Instance.new("Frame")
+    contentContainer.Name = "ContentContainer"
+    contentContainer.Parent = mainFrame
+    contentContainer.Size = UDim2.new(1, -110, 1, -50)
+    contentContainer.Position = UDim2.new(0, 105, 0, 45)
+    contentContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    contentContainer.BorderSizePixel = 0
+
+    --=======================--
+    -- OBJECT METATABLES    --
+    --=======================--
+    local ui = {}
+    local tabMetatable = { __index = {} }
+    local sectionMetatable = { __index = {} }
+    local toggleMetatable = { __index = {} }
+
+    local tabs = {}
+    local activeTab = nil
+
+    -- Function to handle switching between tabs
+    local function switchTab(tabObject)
+        if activeTab == tabObject then return end
+
+        for _, t in ipairs(tabs) do
+            t.contentFrame.Visible = false
+            t.button.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- Inactive color
+        end
+
+        tabObject.contentFrame.Visible = true
+        tabObject.button.BackgroundColor3 = Color3.fromRGB(80, 80, 255) -- Active color
+        activeTab = tabObject
+    end
+
+    --================--
+    -- UI API METHODS --
+    --================--
+
+    --- Creates a new tab.
+    -- @param name The name of the tab.
+    -- @return The new tab object.
+    function ui:AddTab(name)
+        local tabObject = setmetatable({ sections = {} }, tabMetatable)
+
+        tabObject.button = Instance.new("TextButton")
+        tabObject.button.Name = name .. "TabButton"
+        tabObject.button.Parent = tabContainer
+        tabObject.button.Size = UDim2.new(1, -10, 0, 30)
+        tabObject.button.Position = UDim2.new(0, 5, 0, 0)
+        tabObject.button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        tabObject.button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        tabObject.button.Text = name
+        tabObject.button.Font = Enum.Font.SourceSans
+        tabObject.button.TextSize = 16
+        tabObject.button.AutoButtonColor = false
+        Instance.new("UICorner", tabObject.button)
+
+        tabObject.contentFrame = Instance.new("ScrollingFrame")
+        tabObject.contentFrame.Name = name .. "Content"
+        tabObject.contentFrame.Parent = contentContainer
+        tabObject.contentFrame.Size = UDim2.new(1, 0, 1, 0)
+        tabObject.contentFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        tabObject.contentFrame.BorderSizePixel = 0
+        tabObject.contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+        tabObject.contentFrame.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
+        tabObject.contentFrame.Visible = false
+        local contentLayout = Instance.new("UIListLayout", tabObject.contentFrame)
+        contentLayout.Padding = UDim.new(0, 10)
+
+        tabObject.button.MouseButton1Click:Connect(function() switchTab(tabObject) end)
+
+        table.insert(tabs, tabObject)
+        if #tabs == 1 then switchTab(tabObject) end -- Activate the first tab by default
+
+        return tabObject
+    end
+
+    --- Creates a new section within a tab.
+    -- @param name The name of the section.
+    -- @return The new section object.
+    function tabMetatable.__index:AddSection(name)
+        local sectionObject = setmetatable({ controls = {} }, sectionMetatable)
+
+        sectionObject.frame = Instance.new("Frame")
+        sectionObject.frame.Name = name .. "SectionFrame"
+        sectionObject.frame.Parent = self.contentFrame
+        sectionObject.frame.Size = UDim2.new(1, -10, 0, 0) -- Height is automatic
+        sectionObject.frame.Position = UDim2.new(0, 5, 0, 0)
+        sectionObject.frame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        sectionObject.frame.BorderSizePixel = 0
+        sectionObject.frame.AutomaticSize = Enum.AutomaticSize.Y
+        sectionObject.frame.ClipsDescendants = true
+        Instance.new("UICorner", sectionObject.frame)
+
+        local sectionLayout = Instance.new("UIListLayout", sectionObject.frame)
+        sectionLayout.Padding = UDim.new(0, 8)
+
+        local sectionTitle = Instance.new("TextLabel")
+        sectionTitle.Name = "SectionTitle"
+        sectionTitle.Parent = sectionObject.frame
+        sectionTitle.Size = UDim2.new(1, 0, 0, 25)
+        sectionTitle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        sectionTitle.Text = "  " .. name
+        sectionTitle.TextColor3 = Color3.fromRGB(220, 220, 220)
+        sectionTitle.Font = Enum.Font.SourceSansBold
+        sectionTitle.TextSize = 16
+        sectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+        local padding = Instance.new("UIPadding", sectionObject.frame)
+        padding.PaddingTop = UDim.new(0, 30)
+        padding.PaddingBottom = UDim.new(0, 5)
+        padding.PaddingLeft = UDim.new(0, 5)
+        padding.PaddingRight = UDim.new(0, 5)
+
+        table.insert(self.sections, sectionObject)
+        return sectionObject
+    end
+
+    --- Creates a new toggle switch within a section.
+    -- @param name The name of the toggle.
+    -- @return The new toggle object.
+    function sectionMetatable.__index:AddNewToggle(name)
+        local toggleObject = setmetatable({ Value = false, _connections = {} }, toggleMetatable)
+
+        local toggleFrame = Instance.new("Frame", self.frame)
+        toggleFrame.Name = name .. "ToggleFrame"
+        toggleFrame.Size = UDim2.new(1, 0, 0, 25)
+        toggleFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        toggleFrame.BorderSizePixel = 0
+
+        local toggleLabel = Instance.new("TextLabel", toggleFrame)
+        toggleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+        toggleLabel.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        toggleLabel.Text = name
+        toggleLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        toggleLabel.Font = Enum.Font.SourceSans
+        toggleLabel.TextSize = 14
+        toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+        local toggleButton = Instance.new("TextButton", toggleFrame)
+        toggleButton.Size = UDim2.new(0.3, -10, 1, 0)
+        toggleButton.Position = UDim2.new(0.7, 5, 0, 0)
+        toggleButton.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
+        toggleButton.Text = "Off"
+        toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        toggleButton.Font = Enum.Font.SourceSansBold
+        toggleButton.TextSize = 14
+        Instance.new("UICorner", toggleButton)
+
+        toggleButton.MouseButton1Click:Connect(function()
+            toggleObject.Value = not toggleObject.Value
+            if toggleObject.Value then
+                toggleButton:TweenSizeAndPosition(toggleButton.Size, toggleButton.Position, "Out", "Quad", 0.1, true, function()
+                    toggleButton.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+                    toggleButton.Text = "On"
+                end)
+            else
+                 toggleButton:TweenSizeAndPosition(toggleButton.Size, toggleButton.Position, "Out", "Quad", 0.1, true, function()
+                    toggleButton.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
+                    toggleButton.Text = "Off"
+                end)
+            end
+
+            for _, callback in ipairs(toggleObject._connections) do
+                task.spawn(callback, toggleObject.Value)
+            end
+        end)
+
+        table.insert(self.controls, toggleObject)
+        return toggleObject
+    end
+
+    --- Connects a function to be called when the toggle's value changes.
+    -- @param callback The function to call. It receives the new boolean value as an argument.
+    function toggleMetatable.__index:OnChanged(callback)
+        if type(callback) == "function" then
+            table.insert(self._connections, callback)
+        else
+            warn("[GuiLib] OnChanged requires a function argument.")
+        end
+    end
+
+    return ui
+end
