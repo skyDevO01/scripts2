@@ -37,7 +37,8 @@ function Library:CreateWindow(config)
 	mainFrame.BackgroundColor3 = Color3.new(0.12, 0.12, 0.16)
 	mainFrame.BorderSizePixel = 0
 	mainFrame.Parent = self.ScreenGui
-	Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
+	Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 
+8)
 
 	-- Title Bar
 	local titleBar = Instance.new("TextLabel")
@@ -60,7 +61,7 @@ function Library:CreateWindow(config)
 	local tabLayout = Instance.new("UIListLayout")
 	tabLayout.FillDirection = Enum.FillDirection.Horizontal
 	tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	tabLayout.Spacing = UDim.new(0, 10)
+	tabLayout.Padding = UDim.new(0, 10) -- <-- FIXED: Was 'Spacing'
 	tabLayout.Parent = tabContainer
 
 	-- Content Frame
@@ -79,7 +80,8 @@ function Library:CreateWindow(config)
 			dragStart = input.Position
 			frameStart = mainFrame.Position
 			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
+				if input.UserInputState == 
+Enum.UserInputState.End then
 					dragging = false
 				end
 			end)
@@ -91,6 +93,11 @@ function Library:CreateWindow(config)
 			mainFrame.Position = UDim2.new(frameStart.X.Scale, frameStart.X.Offset + delta.X, frameStart.Y.Scale, frameStart.Y.Offset + delta.Y)
 		end
 	end)
+
+	-- Add Toggle Method
+	function Window:Toggle()
+		mainFrame.Visible = not mainFrame.Visible
+	end
 
 	-- Add Tab Method
 	function Window:AddTab(tabName)
@@ -123,7 +130,8 @@ function Library:CreateWindow(config)
 
 		local function SetActive()
 			if ActiveTab then
-				ActiveTab.button.BackgroundColor3 = Color3.new(0.24, 0.24, 0.29)
+				ActiveTab.button.BackgroundColor3 = Color3.new(0.24, 0.24, 
+0.29)
 				ActiveTab.button.TextColor3 = Color3.new(0.78, 0.78, 0.78)
 				ActiveTab.content.Visible = false
 			end
@@ -169,7 +177,8 @@ function Library:CreateWindow(config)
 				local container = Instance.new("Frame")
 				container.Size = UDim2.new(1, 0, 0, 25)
 				container.BackgroundTransparency = 1
-				container.Parent = sectionFrame
+				container.Parent 
+= sectionFrame
 
 				local label = Instance.new("TextLabel", container)
 				label.Size = UDim2.new(1, -50, 1, 0)
@@ -200,7 +209,8 @@ function Library:CreateWindow(config)
 						toggle.BackgroundColor3 = color
 					else
 						TweenService:Create(handle, TweenInfo.new(0.2), {Position = pos}):Play()
-						toggle.BackgroundColor3 = color
+						toggle.BackgroundColor3 
+= color
 					end
 					if cfg.callback then cfg.callback(value) end
 				end
@@ -240,7 +250,8 @@ function Library:CreateWindow(config)
 				Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
 
 				local handle = Instance.new("TextButton", sliderFrame)
-				handle.Size = UDim2.new(0, 15, 0, 15)
+				handle.Size = UDim2.new(0, 15, 
+0, 15)
 				handle.Position = UDim2.new(0, -7.5, 0.5, -7.5)
 				handle.BackgroundColor3 = Color3.new(0, 0.67, 1)
 				handle.Text = ""
@@ -268,7 +279,8 @@ function Library:CreateWindow(config)
 					conn = RunService.Heartbeat:Connect(function()
 						local mouseX = UserInputService:GetMouseLocation().X
 						local ratio = math.clamp((mouseX - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-						local newValue = cfg.min + ratio * (cfg.max - cfg.min)
+						local newValue = cfg.min + ratio * (cfg.max - 
+cfg.min)
 						updateValue(newValue)
 					end)
 					UserInputService.InputEnded:Wait()
@@ -309,7 +321,8 @@ function Library:CreateWindow(config)
 					local conn
 					conn = UserInputService.InputBegan:Connect(function(input, gp)
 						if not gp and input.UserInputType == Enum.UserInputType.Keyboard then
-							currentKey = input.KeyCode
+							currentKey = 
+input.KeyCode
 							button.Text = tostring(currentKey.Name)
 							button.BackgroundColor3 = Color3.new(0.16, 0.16, 0.2)
 							conn:Disconnect()
