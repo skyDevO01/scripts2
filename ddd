@@ -559,12 +559,16 @@ function Library:CreateWindow(name)
             open = not open
             
             if open then
-                updateDropdownPosition()
+                updateDropdownPosition() -- This sets the container to its full, final size
+                local targetSize = dropdownContainer.Size -- Store the correct final size
+                
+                -- Set the height to 0 to animate *from*
+                dropdownContainer.Size = UDim2.new(targetSize.X.Scale, targetSize.X.Offset, 0, 0)
                 dropdownContainer.Visible = true
                 
                 -- Animate opening
                 local openTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = dropdownContainer.Size  -- Already set to full size
+                    Size = targetSize -- Animate *to* the stored final size
                 })
                 openTween:Play()
                 
