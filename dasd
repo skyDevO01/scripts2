@@ -42,7 +42,9 @@
     end)
 ]]
 
-return function()
+-- We wrap the GUI creation in a function that we call immediately.
+-- This ensures that loadstring returns the UI object directly.
+local createGui = function()
     -- Prevent creating duplicate UIs if the script is run multiple times
     if game:GetService("CoreGui"):FindFirstChild("GeminiGuiLib") then
         game:GetService("CoreGui").GeminiGuiLib:Destroy()
@@ -279,3 +281,6 @@ return function()
 
     return ui
 end
+
+return createGui()
+
