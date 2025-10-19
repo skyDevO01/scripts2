@@ -49,6 +49,7 @@ function Library:CreateWindow(name)
     frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     frame.BorderSizePixel = 0
     frame.ClipsDescendants = true
+    frame.Transparency = 1  -- Start transparent for load animation
     
     -- Add corner rounding
     local corner = Instance.new("UICorner")
@@ -242,6 +243,36 @@ function Library:CreateWindow(name)
         screenGui = screenGui
     }
     
+    -- Watermark
+    local watermark = Instance.new("TextLabel")
+    watermark.Parent = screenGui
+    watermark.Size = UDim2.new(0, 200, 0, 20)
+    watermark.Position = UDim2.new(1, -210, 1, -30)
+    watermark.BackgroundTransparency = 0.5
+    watermark.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    watermark.TextColor3 = Color3.fromRGB(255, 255, 255)
+    watermark.Text = name .. " | FPS: " .. math.floor(1 / game:GetService("RunService").RenderStepped:Wait())
+    watermark.Font = Enum.Font.Gotham
+    watermark.TextSize = 12
+    watermark.Visible = true
+    
+    -- Update watermark FPS
+    RunService.RenderStepped:Connect(function(delta)
+        watermark.Text = name .. " | FPS: " .. math.floor(1 / delta)
+    end)
+    
+    -- UI Sound Effects
+    local soundEnabled = true
+    local clickSound = Instance.new("Sound")
+    clickSound.Parent = screenGui
+    clickSound.SoundId = "rbxassetid://6027276128"  -- Click sound ID
+    clickSound.Volume = 0.5
+    
+    local toggleSound = Instance.new("Sound")
+    toggleSound.Parent = screenGui
+    toggleSound.SoundId = "rbxassetid://6027276128"  -- Toggle sound ID
+    toggleSound.Volume = 0.5
+    
     -- Tab metatable
     local Tab = {}
     Tab.__index = Tab
@@ -286,6 +317,10 @@ function Library:CreateWindow(name)
             local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
             local tween = TweenService:Create(button, tweenInfo, {BackgroundColor3 = Color3.fromRGB(70, 70, 70)})
             tween:Play()
+            
+            if soundEnabled then
+                clickSound:Play()
+            end
             
             callback()
         end)
@@ -364,6 +399,10 @@ function Library:CreateWindow(name)
             bgTween:Play()
             dotTween:Play()
             
+            if soundEnabled then
+                toggleSound:Play()
+            end
+            
             callback(current)
         end)
     end
@@ -393,19 +432,19 @@ function Library:CreateWindow(name)
         arrow.ImageColor3 = Color3.fromRGB(200, 200, 200)
         arrow.Parent = dropdown
         
-        -- Create dropdown container (outside main GUI)
+        -- Create dropdown container (parent to screenGui to avoid clipping)
         local dropdownContainer = Instance.new("Frame")
         local containerCorner = Instance.new("UICorner")
         local containerLayout = Instance.new("UIListLayout")
         local containerShadow = Instance.new("ImageLabel")
         
-        dropdownContainer.Size = UDim2.new(1, 0, 0, 0)
+        dropdownContainer.Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
         dropdownContainer.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
         dropdownContainer.BorderSizePixel = 0
         dropdownContainer.ClipsDescendants = true
         dropdownContainer.Visible = false
         dropdownContainer.ZIndex = 5
-        dropdownContainer.Parent = dropdown
+        dropdownContainer.Parent = window.screenGui  -- Parent to screenGui
         
         containerCorner.CornerRadius = UDim.new(0, 6)
         containerCorner.Parent = dropdownContainer
@@ -463,7 +502,7 @@ function Library:CreateWindow(name)
                 
                 -- Close dropdown with animation
                 local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(1, 0, 0, 0)
+                    Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
                 })
                 closeTween:Play()
                 
@@ -476,6 +515,10 @@ function Library:CreateWindow(name)
                 -- Rotate arrow back
                 local arrowTween = TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 0})
                 arrowTween:Play()
+                
+                if soundEnabled then
+                    clickSound:Play()
+                end
             end)
         end
         
@@ -498,14 +541,14 @@ function Library:CreateWindow(name)
             open = not open
             
             if open then
-                -- Position dropdown container below the dropdown button
-                dropdownContainer.Position = UDim2.new(0, 0, 1, 5)
-                dropdownContainer.Size = UDim2.new(1, 0, 0, 0)
+                -- Position to the right of the dropdown button
+                dropdownContainer.Position = UDim2.new(0, dropdown.AbsolutePosition.X + dropdown.AbsoluteSize.X + 5, 0, dropdown.AbsolutePosition.Y)
+                dropdownContainer.Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
                 dropdownContainer.Visible = true
                 
                 -- Animate opening
                 local openTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(1, 0, 0, #options * 30)
+                    Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, #options * 30)
                 })
                 openTween:Play()
                 
@@ -515,7 +558,7 @@ function Library:CreateWindow(name)
             else
                 -- Animate closing
                 local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                    Size = UDim2.new(1, 0, 0, 0)
+                    Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
                 })
                 closeTween:Play()
                 
@@ -527,21 +570,20 @@ function Library:CreateWindow(name)
                 local arrowTween = TweenService:Create(arrow, TweenInfo.new(0.2), {Rotation = 0})
                 arrowTween:Play()
             end
+            
+            if soundEnabled then
+                clickSound:Play()
+            end
         end)
         
         -- Close dropdown when clicking outside
         local function closeDropdown(input)
             if open and input.UserInputType == Enum.UserInputType.MouseButton1 then
-                local isInDropdown = dropdownContainer.AbsolutePosition.X <= input.Position.X and input.Position.X <= dropdownContainer.AbsolutePosition.X + dropdownContainer.AbsoluteSize.X and
-                                   dropdownContainer.AbsolutePosition.Y <= input.Position.Y and input.Position.Y <= dropdownContainer.AbsolutePosition.Y + dropdownContainer.AbsoluteSize.Y
-                
-                local isInButton = dropdown.AbsolutePosition.X <= input.Position.X and input.Position.X <= dropdown.AbsolutePosition.X + dropdown.AbsoluteSize.X and
-                                 dropdown.AbsolutePosition.Y <= input.Position.Y and input.Position.Y <= dropdown.AbsolutePosition.Y + dropdown.AbsoluteSize.Y
-                
-                if not isInDropdown and not isInButton then
+                local isInDropdown = dropdownContainer:IsAncestorOf(input.Target) or dropdown:IsAncestorOf(input.Target)
+                if not isInDropdown then
                     open = false
                     local closeTween = TweenService:Create(dropdownContainer, TweenInfo.new(0.2), {
-                        Size = UDim2.new(1, 0, 0, 0)
+                        Size = UDim2.new(0, dropdown.AbsoluteSize.X, 0, 0)
                     })
                     closeTween:Play()
                     
@@ -634,6 +676,10 @@ function Library:CreateWindow(name)
             
             valueLabel.Text = tostring(math.floor(value))
             callback(value)
+            
+            if soundEnabled then
+                clickSound:Play()
+            end
         end
         
         handle.MouseButton1Down:Connect(function()
@@ -726,6 +772,9 @@ function Library:CreateWindow(name)
         -- Tab switching logic
         tabButton.MouseButton1Click:Connect(function()
             self:SwitchTab(tab)
+            if soundEnabled then
+                clickSound:Play()
+            end
         end)
         
         -- Add to window tabs
@@ -781,19 +830,65 @@ function Library:CreateWindow(name)
     end)
     
     settingsTab:Toggle("Watermark", true, function(state)
-        -- Watermark functionality can be added here
-        print("Watermark:", state)
+        watermark.Visible = state
     end)
     
     settingsTab:Toggle("UI Sound Effects", true, function(state)
-        -- Sound effects toggle
-        print("UI Sounds:", state)
+        soundEnabled = state
     end)
     
-    settingsTab:Button("Change Hide Keybind", function()
-        -- Keybind changing functionality can be added here
-        print("Keybind change button clicked!")
-    end)
+    -- Keybind changer as TextBox
+    do
+        local keybindFrame = Instance.new("Frame")
+        local keybindLabel = Instance.new("TextLabel")
+        local keybindTextBox = Instance.new("TextBox")
+        local keybindCorner = Instance.new("UICorner")
+        
+        keybindFrame.Size = UDim2.new(1, 0, 0, 35)
+        keybindFrame.BackgroundTransparency = 1
+        keybindFrame.Parent = settingsTab.container
+        
+        keybindLabel.Size = UDim2.new(0.5, 0, 1, 0)
+        keybindLabel.BackgroundTransparency = 1
+        keybindLabel.Text = "Hide Keybind:"
+        keybindLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        keybindLabel.Font = Enum.Font.Gotham
+        keybindLabel.TextSize = 14
+        keybindLabel.TextXAlignment = Enum.TextXAlignment.Left
+        keybindLabel.Parent = keybindFrame
+        
+        keybindTextBox.Size = UDim2.new(0.5, 0, 1, 0)
+        keybindTextBox.Position = UDim2.new(0.5, 0, 0, 0)
+        keybindTextBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        keybindTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+        keybindTextBox.Text = "RightControl"
+        keybindTextBox.Font = Enum.Font.Gotham
+        keybindTextBox.TextSize = 14
+        keybindTextBox.Parent = keybindFrame
+        
+        keybindCorner.CornerRadius = UDim.new(0, 6)
+        keybindCorner.Parent = keybindTextBox
+        
+        keybindTextBox.FocusLost:Connect(function(enterPressed)
+            if enterPressed then
+                local keyName = keybindTextBox.Text:gsub(" ", "")
+                local success, keyCode = pcall(function()
+                    return Enum.KeyCode[keyName]
+                end)
+                if success and keyCode then
+                    hideKeybind = keyCode
+                else
+                    keybindTextBox.Text = "Invalid"
+                end
+            end
+        end)
+    end
+    
+    -- Load up animation
+    local loadTween = TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Transparency = 0
+    })
+    loadTween:Play()
     
     return window
 end
