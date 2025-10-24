@@ -6,5 +6,9 @@ return {
     [3956818381] = {
         name = "⚡Ninja Legends",
         url="https://gist.githubusercontent.com/skyDevO01/475203e0bd9552c942a87d3ee6027263/raw/062a7f6fe302b018b036438b4c482ef425844759/Ninja%2520Legends.Lua"
+    },
+    [72615021017011] = {
+        name = "⛩️+1 Unlimited World",
+        url="https://gist.githubusercontent.com/skyDevO01/4cfc42814510227036ccbb666f022d61/raw/0f71fb352f28c255fb24610cf38a63dc22d756cd/Unlimited%2520World.Lua"
     }
 }
