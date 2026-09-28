@@ -14,7 +14,29 @@ local HttpService   = game:GetService("HttpService")
 local Lighting      = game:GetService("Lighting")
 local LocalPlayer   = Players.LocalPlayer
 
-local Library = { Flags = {}, Options = {}, Folder = "GlassUI", Version = "1.0.0", _blurs = {} }
+local function Signal()
+    local sig = { _h = {} }
+    function sig:Connect(fn)
+        local h = { fn = fn }
+        table.insert(self._h, h)
+        return { Disconnect = function() h.fn = nil end }
+    end
+    function sig:Fire(...)
+        for _, h in ipairs(self._h) do
+            if h.fn then
+                local ok, err = pcall(h.fn, ...)
+                if not ok then warn("[GlassUI] OnUnload error: " .. tostring(err)) end
+            end
+        end
+    end
+    function sig:Clear() table.clear(self._h) end
+    return sig
+end
+
+local Library = {
+    Flags = {}, Options = {}, Windows = {}, Folder = "GlassUI", Version = "1.1.0", _blurs = {},
+    OnUnload = Signal(), Unloaded = false, Listening = false,
+}
 local connections = {}
 
 ------------------------------------------------------------------------------
@@ -635,12 +657,14 @@ function Elements:AddKeybind(o)
 
     connect(btn.MouseButton1Click, function()
         k.Listening = true
+        Library.Listening = true
         btn.Text = "..."
         tween(btn, { BackgroundTransparency = 0.7 }, 0.2)
     end)
-    connect(UIS.InputBegan, function(input, gp)
+    connect(UIS.InputBegan, function(input)
         if k.Listening then
             local t = input.UserInputType
+            task.defer(function() Library.Listening = false end)
             if t == Enum.UserInputType.Keyboard then
                 k.Listening = false
                 if input.KeyCode == Enum.KeyCode.Escape or input.KeyCode == Enum.KeyCode.Backspace then k:Set(nil)
@@ -651,7 +675,8 @@ function Elements:AddKeybind(o)
             end
             return
         end
-        if gp or not k.Key or UIS:GetFocusedTextBox() or not matches(input) then return end
+        -- gameProcessed is intentionally ignored: games often sink keys like E/F via ContextActionService
+        if not k.Key or UIS:GetFocusedTextBox() or not matches(input) then return end
         if k.Mode == "Toggle" then
             k.State = not k.State
             fire(o.Callback, k.State)
@@ -680,11 +705,15 @@ function Library:CreateWindow(cfg)
     cfg = cfg or {}
     if cfg.ConfigFolder then self.Folder = cfg.ConfigFolder end
     local gui = getGui()
-    local Window = { Tabs = {}, Visible = false, ToggleKey = cfg.ToggleKey or Enum.KeyCode.RightShift }
+    local toggleKey = cfg.ToggleKey or Enum.KeyCode.RightShift
+    if type(toggleKey) == "string" then toggleKey = Enum.KeyCode[toggleKey] end
+    local mode = tostring((getgenv and getgenv().ui_mode) or cfg.Mode or "Pc"):lower()
+    local isMobile = mode == "mobile"
+    local Window = { Tabs = {}, Visible = false, ToggleKey = toggleKey, Mobile = isMobile, OnUnload = Library.OnUnload }
 
     local main = New("CanvasGroup", {
         Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
-        Size = cfg.Size or UDim2.fromOffset(640, 440), BackgroundColor3 = Theme.Bg, BackgroundTransparency = 0.1,
+        Size = cfg.Size or (isMobile and UDim2.fromOffset(500, 330) or UDim2.fromOffset(640, 440)), BackgroundColor3 = Theme.Bg, BackgroundTransparency = 0.1,
         GroupTransparency = 1, Parent = gui,
     })
     Corner(main, 14)
@@ -710,7 +739,7 @@ function Library:CreateWindow(cfg)
         BackgroundColor3 = White, BackgroundTransparency = 1, Text = "", Parent = top,
     })
     Corner(close, 8)
-    Icon(close, "x", 16, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+    Icon(close, "minus", 16, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
     connect(close.MouseEnter, function() tween(close, { BackgroundTransparency = 0.88 }, 0.2) end)
     connect(close.MouseLeave, function() tween(close, { BackgroundTransparency = 1 }, 0.25) end)
     connect(close.MouseButton1Click, function() Window:Toggle(false) end)
@@ -749,9 +778,48 @@ function Library:CreateWindow(cfg)
         table.insert(Library._blurs, blur)
     end
 
+    -- mobile: draggable floating button that shows / hides the window
+    local mobileIcon
+    if isMobile then
+        local tb = New("TextButton", {
+            Name = "MobileToggle", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 46, 0.35, 0),
+            Size = UDim2.fromOffset(44, 44), BackgroundColor3 = Theme.Bg, BackgroundTransparency = 0.15, Text = "",
+            ZIndex = 100, Parent = gui,
+        })
+        Corner(tb, 22)
+        local ts = Stroke(tb, 0.7)
+        New("UIGradient", { Rotation = 45, Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.7) }), Parent = ts })
+        mobileIcon = Icon(tb, "eye-off", 20, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) })
+        local bdrag, bmoved, bstart, bpos = false, false, nil, nil
+        connect(tb.InputBegan, function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                bdrag, bmoved, bstart, bpos = true, false, i.Position, tb.Position
+                tween(tb, { Size = UDim2.fromOffset(38, 38) }, 0.15)
+            end
+        end)
+        connect(UIS.InputChanged, function(i)
+            if bdrag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+                local d = i.Position - bstart
+                if d.Magnitude > 6 then bmoved = true end
+                if bmoved then
+                    tween(tb, { Position = UDim2.new(bpos.X.Scale, bpos.X.Offset + d.X, bpos.Y.Scale, bpos.Y.Offset + d.Y) }, 0.06, Enum.EasingStyle.Sine)
+                end
+            end
+        end)
+        connect(UIS.InputEnded, function(i)
+            if bdrag and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
+                bdrag = false
+                tween(tb, { Size = UDim2.fromOffset(44, 44) }, 0.3, Enum.EasingStyle.Back)
+                if not bmoved then Window:Toggle() end
+            end
+        end)
+    end
+
     function Window:Toggle(v)
         if v == nil then v = not self.Visible end
         self.Visible = v
+        if mobileIcon then applyIcon(mobileIcon, v and "eye-off" or "eye") end
         if v then
             main.Visible = true
             tween(main, { GroupTransparency = 0 }, 0.4)
@@ -763,8 +831,11 @@ function Library:CreateWindow(cfg)
         end
         if blur then tween(blur, { Size = v and (cfg.BlurSize or 14) or 0 }, 0.4) end
     end
-    connect(UIS.InputBegan, function(i, gp)
-        if not gp and i.KeyCode == Window.ToggleKey and not UIS:GetFocusedTextBox() then Window:Toggle() end
+    connect(UIS.InputBegan, function(i)
+        if i.UserInputType == Enum.UserInputType.Keyboard and i.KeyCode == Window.ToggleKey
+            and not Library.Listening and not UIS:GetFocusedTextBox() then
+            Window:Toggle()
+        end
     end)
 
     ---------------------------------------------------------------- tabs
@@ -913,6 +984,10 @@ function Library:CreateWindow(cfg)
             end, "Delete")
         end })
         sec:AddButton({ Name = "Refresh List", Icon = "refresh-cw", Callback = refresh })
+        local ui = tab:AddSection("Interface")
+        ui:AddButton({ Name = "Unload UI", Icon = "power", Callback = function()
+            self:Confirm("Unload UI?", "This closes the interface and runs all OnUnload handlers.", function() Library:Unload() end, "Unload")
+        end })
         if not hasFS then
             sec:AddLabel("No file access detected - configs are kept in memory for this session only.")
         end
@@ -920,16 +995,24 @@ function Library:CreateWindow(cfg)
     end
 
     Window:Toggle(true)
-    table.insert(Library.Windows or {}, Window)
+    table.insert(Library.Windows, Window)
     return Window
 end
 
 function Library:Unload()
+    if self.Unloaded then return end
+    self.Unloaded = true
+    self.OnUnload:Fire()      -- let the script disable its own features first
+    self.OnUnload:Clear()
     for _, c in ipairs(connections) do pcall(function() c:Disconnect() end) end
+    table.clear(connections)
     for _, b in ipairs(self._blurs) do pcall(function() b:Destroy() end) end
-    if self.Gui then self.Gui:Destroy() end
+    table.clear(self._blurs)
+    if self.Gui then pcall(function() self.Gui:Destroy() end) end
+    self.Gui, self._notif = nil, nil
     table.clear(self.Flags)
     table.clear(self.Options)
+    table.clear(self.Windows)
 end
 
 return Library
