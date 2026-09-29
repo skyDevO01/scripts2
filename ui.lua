@@ -985,6 +985,21 @@ function Library:CreateWindow(cfg)
         end })
         sec:AddButton({ Name = "Refresh List", Icon = "refresh-cw", Callback = refresh })
         local ui = tab:AddSection("Interface")
+        local uiKey
+        uiKey = ui:AddKeybind({
+            Name = "UI Toggle Key", Default = self.ToggleKey, Mode = "Press", Flag = "ui_toggle_key",
+            Changed = function(key)
+                -- the window key must be a keyboard key; fall back to RightShift if cleared / mouse button
+                if key and key.EnumType == Enum.KeyCode then
+                    self.ToggleKey = key
+                    note("keyboard", "UI keybind", "Toggle key set to " .. key.Name)
+                else
+                    self.ToggleKey = Enum.KeyCode.RightShift
+                    uiKey:Set(Enum.KeyCode.RightShift, true)
+                    note("triangle-alert", "UI keybind", "Reset to RightShift (keyboard keys only)")
+                end
+            end,
+        })
         ui:AddButton({ Name = "Unload UI", Icon = "power", Callback = function()
             self:Confirm("Unload UI?", "This closes the interface and runs all OnUnload handlers.", function() Library:Unload() end, "Unload")
         end })
