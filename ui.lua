@@ -366,7 +366,7 @@ end
 function Elements:AddButton(o)
     local b = { Type = "Button" }
     local r = Row(self, 36)
-    local lbl = Label(r, o.Name, { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -44, 1, 0) })
+    local lbl = Label(r, o.Name, { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -44, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
     if o.Icon then Icon(r, o.Icon, 16, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0) }) end
     local hit = Hit(r)
     connect(hit.MouseButton1Down, function(x, y)
@@ -947,19 +947,50 @@ function Library:CreateWindow(cfg)
             end
         end
 
-        sec:AddButton({ Name = "Create / Save Config", Icon = "save", Callback = function()
+        -- double-click protection: 1st click arms the button with a 3-2-1 countdown, 2nd click confirms, timeout cancels
+        local function makeArm(btn, baseText)
+            local current
+            return function(key, armText, action)
+                if current and current.key == key then
+                    current = nil
+                    btn:SetText(baseText)
+                    action()
+                    return
+                end
+                local token = { key = key }
+                current = token
+                task.spawn(function()
+                    for i = 3, 1, -1 do
+                        if current ~= token then return end
+                        btn:SetText(armText .. " " .. i .. "...")
+                        task.wait(1)
+                    end
+                    if current == token then
+                        current = nil
+                        btn:SetText(baseText)
+                    end
+                end)
+            end
+        end
+
+        local createBtn, createArm
+        createBtn = sec:AddButton({ Name = "Create / Save Config", Icon = "save", Callback = function()
             local n = sanitize(nameBox:Get())
             if n == "" then return note("triangle-alert", "Config", "Enter a config name first") end
             if Library:ConfigExists(n) then
-                self:Confirm("Overwrite config?", "'" .. n .. "' already exists and will be replaced.", function() save(n) end, "Overwrite")
+                createArm(n, "Are you sure to overwrite?", function() save(n) end)
             else
                 save(n)
             end
         end })
-        sec:AddButton({ Name = "Overwrite Selected", Icon = "file-pen", Callback = function()
+        createArm = makeArm(createBtn, "Create / Save Config")
+
+        local overwriteBtn, overwriteArm
+        overwriteBtn = sec:AddButton({ Name = "Overwrite Selected", Icon = "file-pen", Callback = function()
             local s = selected() if not s then return end
-            self:Confirm("Overwrite config?", "'" .. s .. "' will be replaced with your current settings.", function() save(s) end, "Overwrite")
+            overwriteArm(s, "Are you sure to overwrite?", function() save(s) end)
         end })
+        overwriteArm = makeArm(overwriteBtn, "Overwrite Selected")
         sec:AddButton({ Name = "Load Selected", Icon = "download", Callback = function()
             local s = selected() if not s then return end
             local ok, err = Library:LoadConfig(s)
@@ -976,15 +1007,18 @@ function Library:CreateWindow(cfg)
                 note("circle-x", "Rename failed", tostring(err))
             end
         end })
-        sec:AddButton({ Name = "Delete Selected", Icon = "trash-2", Callback = function()
+        local deleteBtn, deleteArm
+        deleteBtn = sec:AddButton({ Name = "Delete Selected", Icon = "trash-2", Callback = function()
             local s = selected() if not s then return end
-            self:Confirm("Delete config?", "'" .. s .. "' will be permanently deleted.", function()
+            deleteArm(s, "Are you sure to delete?", function()
                 local ok, err = Library:DeleteConfig(s)
                 if ok then refresh() note("check", "Config deleted", "'" .. s .. "' removed") else note("circle-x", "Delete failed", tostring(err)) end
-            end, "Delete")
+            end)
         end })
+        deleteArm = makeArm(deleteBtn, "Delete Selected")
         sec:AddButton({ Name = "Refresh List", Icon = "refresh-cw", Callback = refresh })
         local ui = tab:AddSection("Interface")
+        ui.Holder.LayoutOrder = 0   -- show above Configurations
         local uiKey
         uiKey = ui:AddKeybind({
             Name = "UI Toggle Key", Default = self.ToggleKey, Mode = "Press", Flag = "ui_toggle_key",
