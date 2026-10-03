@@ -37,6 +37,7 @@ local Theme = {
 local Library = {
     Flags = {}, Options = {}, Windows = {}, Theme = Theme, Folder = "MonoUI",
     _drawings = {}, _conns = {}, _toasts = {},
+    OnUnload = { _callbacks = {}, Connect = function(self, cb) table.insert(self._callbacks, cb) end }
 }
 
 -- re-executing the script cleans up the previous instance first
@@ -348,6 +349,38 @@ function Library:CreateWindow(o)
     table.insert(Library._conns, UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseWheel then win:Wheel(input.Position.Z) end
     end))
+
+    if genv.ui_mode == "Mobile" then
+        local sg = Instance.new("ScreenGui")
+        sg.Name = "MonoUI_MobileToggle"
+        sg.ResetOnSpawn = false
+        pcall(function()
+            if gethui then sg.Parent = gethui()
+            elseif game:GetService("CoreGui"):FindFirstChild("RobloxGui") then sg.Parent = game:GetService("CoreGui")
+            else sg.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end
+        end)
+        if not sg.Parent then pcall(function() sg.Parent = game:GetService("CoreGui") end) end
+        
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0, 45, 0, 45)
+        btn.Position = UDim2.new(0.5, -22, 0, 10)
+        btn.BackgroundColor3 = Theme.Sidebar
+        btn.BorderColor3 = Theme.Accent
+        btn.BorderSizePixel = 2
+        btn.Text = "M"
+        btn.TextColor3 = Theme.Accent
+        btn.TextSize = 24
+        btn.Font = Enum.Font.Code
+        btn.Parent = sg
+        btn.Active = true
+        btn.Draggable = true
+
+        btn.MouseButton1Click:Connect(function()
+            win:Toggle()
+        end)
+
+        table.insert(Library._conns, {Disconnect = function() pcall(function() sg:Destroy() end) end})
+    end
 
     table.insert(Library.Windows, win)
     return win
@@ -1112,6 +1145,11 @@ end
 
 --------------------------------------------------------------------------------
 function Library:Unload()
+    if self.OnUnload and self.OnUnload._callbacks then
+        for _, cb in ipairs(self.OnUnload._callbacks) do
+            pcall(cb)
+        end
+    end
     for _, c in ipairs(self._conns) do pcall(function() c:Disconnect() end) end
     for _, d in ipairs(self._drawings) do pcall(function() d:Remove() end) end
     table.clear(self._conns); table.clear(self._drawings)
