@@ -817,7 +817,7 @@ function Tab:AddTextbox(o)
         txt.Color = el.Value == "" and Theme.Dim or Theme.Text
         local tw = el.Value == "" and 0 or txt.TextBounds.X
         caret.Position = V2(el.x + 20 + tw + 1, el.y + 7)
-        caret.Visible = (el.visible and el.focused == true and (math.floor(os.clock() * 1.8) % 2 == 0)) and true or false
+        caret.Visible = (el.visible == true and el.focused == true and (math.floor(os.clock() * 1.8) % 2 == 0))
     end
     return el
 end
