@@ -10,7 +10,7 @@
     Misc    : Library:Notify(text, duration), Library:Unload()
 ]]
 
-print("[MonoUI] build 1.1 (caret fix)")
+print("[MonoUI] build 1.2")
 local RunService           = game:GetService("RunService")
 local UserInputService     = game:GetService("UserInputService")
 local HttpService          = game:GetService("HttpService")
@@ -38,6 +38,11 @@ local Library = {
     Flags = {}, Options = {}, Windows = {}, Theme = Theme, Folder = "MonoUI",
     _drawings = {}, _conns = {}, _toasts = {},
 }
+
+-- re-executing the script cleans up the previous instance first
+local genv = (getgenv and getgenv()) or _G
+if genv.MonoUI and genv.MonoUI.Unload then pcall(genv.MonoUI.Unload, genv.MonoUI) end
+genv.MonoUI = Library
 
 --------------------------------------------------------------------------------
 -- helpers
@@ -172,7 +177,13 @@ local function ensureLoop()
     if Library._loop then return end
     Library._loop = RunService.RenderStepped:Connect(function(dt)
         local m = UserInputService:GetMouseLocation()
-        for _, w in ipairs(Library.Windows) do w:Step(dt, m.X, m.Y) end
+        for _, w in ipairs(Library.Windows) do
+            local ok, err = pcall(w.Step, w, dt, m.X, m.Y)
+            if not ok and err ~= Library._lastErr then
+                Library._lastErr = err -- report each distinct error once instead of every frame
+                warn("[MonoUI] " .. tostring(err))
+            end
+        end
         stepToasts(dt)
     end)
     table.insert(Library._conns, Library._loop)
