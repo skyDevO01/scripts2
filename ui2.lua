@@ -10,6 +10,7 @@
     Misc    : Library:Notify(text, duration), Library:Unload()
 ]]
 
+print("[MonoUI] build 1.1 (caret fix)")
 local RunService           = game:GetService("RunService")
 local UserInputService     = game:GetService("UserInputService")
 local HttpService          = game:GetService("HttpService")
