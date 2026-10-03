@@ -83,7 +83,7 @@ local function placeParts(o, x, y, vis, alpha)
         if not p.noPos then d.Position = V2(x + p.ox, y + p.oy) end
         d.Transparency = p.t * alpha
         if p.group == "popup" then
-            d.Visible = vis and o.popupVis == true
+            d.Visible = (vis == true and o.popupVis == true)
         elseif p.group == "dyn" then
             if not vis then d.Visible = false end -- element drives its own visibility
         else
@@ -687,7 +687,7 @@ function Tab:AddButtons(list)
             b.fill.Color = lerpC(lerpC(Theme.Element, Theme.Hover, b.hover), Theme.Accent, k)
             b.txt.Color = lerpC(Theme.Text, Theme.Inverse, k)
             b.border.Color = lerpC(Theme.Border, Theme.Accent, math.max(b.hover * 0.6, b.arm))
-            b.bar.Visible = b.arm > 0.05 and el.visible
+            b.bar.Visible = (b.arm > 0.05 and el.visible == true)
             b.bar.Size = V2(math.max((b.w - 2) * frac, 0.01), 2)
         end
     end
@@ -1039,7 +1039,7 @@ function Tab:AddDropdown(o)
         -- popup
         local show = el.visible and el.popupVis
         el.pH = popupHeight() * el.anim
-        pBorder.Visible, pFill.Visible = show, show
+        pBorder.Visible, pFill.Visible = (show == true), (show == true)
         pBorder.Size = V2(w - 20, math.max(el.pH, 1))
         pFill.Size = V2(w - 22, math.max(el.pH - 2, 1))
         local px, py = el.x + 10, el.y + 30
@@ -1047,14 +1047,14 @@ function Tab:AddDropdown(o)
         if show and hov and mx then hoverIdx = indexAt(my) end
         local hr = hoverIdx and (hoverIdx - el.pscroll - 1) or nil
         if hr then el.hy = smooth(el.hy or hr, hr, 24, dt) else el.hy = nil end
-        hRect.Visible = show and hr ~= nil
+        hRect.Visible = (show == true and hr ~= nil)
         if hr then hRect.Position = V2(px + 1, py + 4 + el.hy * IH) end
         for i, it in ipairs(el.items) do
             local r = i - el.pscroll - 1
             local top = 4 + r * IH
             local vis = show and r >= 0 and r < MAXV and (top + IH) <= el.pH + 0.5
-            it.txt.Visible = vis
-            it.dot.Visible = vis and selected(it.name)
+            it.txt.Visible = (vis == true)
+            it.dot.Visible = (vis == true and selected(it.name) == true)
             if vis then
                 it.txt.Position = V2(px + 10, py + top + ty(IH, 13))
                 it.dot.Position = V2(px + w - 20 - 14, py + top + IH / 2)
