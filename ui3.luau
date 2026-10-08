@@ -1168,12 +1168,14 @@ function SectionMT:AddToggle(flag, opts)
     local obj = { Type = "Toggle", Value = false, Unsafe = opts.Unsafe and true or false, Text = opts.Text or flag }
     register(obj, flag, opts)
     if obj.Unsafe then table.insert(Library.UnsafeToggles, obj) end
-    -- ON color: custom Color, red for unsafe toggles, otherwise the theme accent
-    local customOn = opts.Color or (obj.Unsafe and UNSAFE_RED) or nil
+    -- switch ON color: custom Color if given, otherwise the theme accent
+    local customOn = opts.Color or nil
     local function onC() return customOn or Library.Theme.Accent end
+    -- label color: red for unsafe toggles (or any TextColor), otherwise normal on/off colors
+    local labelColor = opts.TextColor or (obj.Unsafe and UNSAFE_RED) or nil
     local row = self:_row(24)
     local label = New("TextLabel", {
-        Parent = row, Size = UDim2.new(1, -48, 1, 0), Text = opts.Text or flag, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = row, Size = UDim2.new(1, -48, 1, 0), Text = opts.Text or flag, TextColor3 = labelColor or T.SubText, TextXAlignment = Enum.TextXAlignment.Left,
     })
     local switch = New("Frame", {
         Parent = row, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(36, 18), BackgroundColor3 = T.Element,
@@ -1201,7 +1203,7 @@ function SectionMT:AddToggle(flag, opts)
         Tween(switch, { BackgroundColor3 = v and onC() or T.Element }, 0.2)
         Tween(st, { Color = v and onC() or T.Outline }, 0.2)
         Tween(knob, { Position = v and UDim2.new(1, -15, 0.5, 0) or UDim2.new(0, 3, 0.5, 0), BackgroundColor3 = v and Color3.new(1, 1, 1) or T.SubText }, 0.25, Enum.EasingStyle.Back)
-        Tween(label, { TextColor3 = v and T.Text or T.SubText }, 0.2)
+        Tween(label, { TextColor3 = labelColor or (v and T.Text or T.SubText) }, 0.2)
         if changed and not silent then Fire(self) end
     end
     hit.MouseButton1Click:Connect(function() obj:SetValue(not obj.Value) end)
@@ -1840,7 +1842,7 @@ function WindowMT:_buildSettings()
         end,
     })
     menu:AddToggle("UI_AllowUnsafe", {
-        Text = "Allow Unsafe", Color = UNSAFE_RED, NoSave = true, Default = lib.AllowUnsafe,
+        Text = "Allow Unsafe", TextColor = UNSAFE_RED, NoSave = true, Default = lib.AllowUnsafe,
         Callback = function(v) lib:SetAllowUnsafe(v) end,
     })
     menu:AddSlider("UI_Scale", { Text = "UI Scale", Min = 70, Max = 130, Default = 100, Suffix = "%", Callback = function(v) self:SetScale(v / 100) end })
