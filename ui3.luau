@@ -39,6 +39,8 @@ local Library = {
     Folder = "SmoothUI",
     LastBind = 0,
     Panels = {},
+    UnsafeToggles = {},
+    AllowUnsafe = false,
     PanelTransparency = 0.2,
     ThemeName = "Default",
     DefaultBackground = "https://i.pinimg.com/736x/06/a1/39/06a139f637935c7e6baa69059d895460.jpg",
@@ -144,6 +146,8 @@ local function isPress(i)
     return i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch
 end
 
+local UNSAFE_RED = Color3.fromRGB(255, 70, 80)
+
 local function keyToString(k) return k and tostring(k) or "None" end
 local function stringToKey(s)
     if type(s) ~= "string" or s == "None" then return nil end
@@ -156,6 +160,17 @@ local function keyName(k)
     if not k then return "None" end
     if k.EnumType == Enum.KeyCode then return k.Name end
     return (k.Name:gsub("MouseButton", "MB"))
+end
+
+local function hexOf(c)
+    return string.format("#%02X%02X%02X", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+end
+local function colorFromHex(s)
+    s = tostring(s or ""):gsub("#", "")
+    s = s:match("^%s*(.-)%s*$")
+    if #s == 3 then s = s:gsub(".", function(c) return c .. c end) end
+    if not s:match("^%x%x%x%x%x%x$") then return nil end
+    return Color3.fromRGB(tonumber(s:sub(1, 2), 16), tonumber(s:sub(3, 4), 16), tonumber(s:sub(5, 6), 16))
 end
 
 local function cleanName(s)
@@ -623,6 +638,8 @@ function Library:_serialize()
                 else
                     data[flag] = o.Value or ""
                 end
+            elseif t == "ColorPicker" then
+                data[flag] = hexOf(o.Value)
             elseif t == "Keybind" then
                 data[flag] = { Key = keyToString(o.Key), Mode = o.Mode }
             end
@@ -1038,8 +1055,9 @@ function SectionMT:AddButton(opts, cb)
     if type(opts) == "string" then opts = { Text = opts, Callback = cb } end
     local T = Library.Theme
     local btn = New("TextButton", {
-        Parent = self.Container, Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = T.Element,
-        Text = opts.Text or "Button", ClipsDescendants = true, LayoutOrder = self:_order(),
+        Parent = opts._Parent or self.Container, Size = opts._Size or UDim2.new(1, 0, 0, 28), BackgroundColor3 = T.Element,
+        Text = opts.Text or "Button", ClipsDescendants = true, LayoutOrder = opts._Order or self:_order(),
+        TextTruncate = Enum.TextTruncate.AtEnd,
     })
     Corner(btn); local st = Stroke(btn, T.Outline)
     local RED = Color3.fromRGB(255, 90, 100)
@@ -1097,6 +1115,11 @@ function SectionMT:AddButton(opts, cb)
         Tween(st, { Color = T.Outline }, 0.2)
     end
     btn.MouseButton1Click:Connect(function()
+        if opts.Unsafe and not Library.AllowUnsafe then
+            Tween(st, { Color = UNSAFE_RED }, 0.1)
+            task.delay(0.35, function() Tween(st, { Color = T.Outline }, 0.25) end)
+            return Library:_blockUnsafe(opts.Text)
+        end
         if not confirmSecs then return run() end
         if armed then
             disarm()
@@ -1114,7 +1137,7 @@ function SectionMT:AddButton(opts, cb)
         task.spawn(function()
             for s = confirmSecs, 1, -1 do
                 if armTok ~= tok then return end
-                btn.Text = string.format("Are you sure? Click to confirm (%d)", s)
+                btn.Text = string.format(opts._Row and "Confirm? (%d)" or "Are you sure? Click to confirm (%d)", s)
                 task.wait(1)
             end
             if armTok == tok then disarm() end
@@ -1124,12 +1147,30 @@ function SectionMT:AddButton(opts, cb)
     return obj
 end
 
+-- several buttons in one row: AddButtonRow({ { Text = "A", Callback = f }, { Text = "B", Callback = g } })
+function SectionMT:AddButtonRow(list)
+    local row = self:_row(28)
+    New("UIListLayout", { Parent = row, FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder })
+    local n, objs = #list, {}
+    for i, o in ipairs(list) do
+        local copy = type(o) == "string" and { Text = o } or table.clone(o)
+        copy._Parent, copy._Row, copy._Order = row, true, i
+        copy._Size = UDim2.new(1 / n, -6 * (n - 1) / n, 1, 0)
+        objs[i] = self:AddButton(copy)
+    end
+    return objs
+end
+
 -- Toggle --------------------------------------------------------------
 function SectionMT:AddToggle(flag, opts)
     opts = opts or {}
     local T = Library.Theme
-    local obj = { Type = "Toggle", Value = false }
+    local obj = { Type = "Toggle", Value = false, Unsafe = opts.Unsafe and true or false, Text = opts.Text or flag }
     register(obj, flag, opts)
+    if obj.Unsafe then table.insert(Library.UnsafeToggles, obj) end
+    -- ON color: custom Color, red for unsafe toggles, otherwise the theme accent
+    local customOn = opts.Color or (obj.Unsafe and UNSAFE_RED) or nil
+    local function onC() return customOn or Library.Theme.Accent end
     local row = self:_row(24)
     local label = New("TextLabel", {
         Parent = row, Size = UDim2.new(1, -48, 1, 0), Text = opts.Text or flag, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left,
@@ -1146,18 +1187,26 @@ function SectionMT:AddToggle(flag, opts)
 
     function obj:SetValue(v, silent)
         v = v and true or false
+        if v and self.Unsafe and not Library.AllowUnsafe then
+            v = false
+            if not silent then
+                Library:_blockUnsafe(self.Text)
+                Tween(st, { Color = UNSAFE_RED }, 0.1)
+                task.delay(0.35, function() Tween(st, { Color = T.Outline }, 0.25) end)
+            end
+        end
         local changed = v ~= self.Value
         self.Value = v
         Library.Flags[flag] = v
-        Tween(switch, { BackgroundColor3 = v and Library.Theme.Accent or T.Element }, 0.2)
-        Tween(st, { Color = v and Library.Theme.Accent or T.Outline }, 0.2)
+        Tween(switch, { BackgroundColor3 = v and onC() or T.Element }, 0.2)
+        Tween(st, { Color = v and onC() or T.Outline }, 0.2)
         Tween(knob, { Position = v and UDim2.new(1, -15, 0.5, 0) or UDim2.new(0, 3, 0.5, 0), BackgroundColor3 = v and Color3.new(1, 1, 1) or T.SubText }, 0.25, Enum.EasingStyle.Back)
         Tween(label, { TextColor3 = v and T.Text or T.SubText }, 0.2)
         if changed and not silent then Fire(self) end
     end
     hit.MouseButton1Click:Connect(function() obj:SetValue(not obj.Value) end)
     Library:OnAccent(function()
-        if obj.Value then switch.BackgroundColor3 = Library.Theme.Accent; st.Color = Library.Theme.Accent end
+        if obj.Value then switch.BackgroundColor3 = onC(); st.Color = onC() end
     end)
     obj:SetValue(opts.Default or false, true)
     return obj
@@ -1368,6 +1417,124 @@ function SectionMT:AddDropdown(flag, opts)
     local def = opts.Default
     if type(def) == "number" then def = obj.Values[def] end
     obj:SetValue(def, true)
+    return obj
+end
+
+-- ColorPicker ----------------------------------------------------------
+function SectionMT:AddColorPicker(flag, opts)
+    opts = opts or {}
+    local T = Library.Theme
+    local obj = { Type = "ColorPicker", Value = opts.Default or Color3.fromRGB(255, 255, 255), Open = false }
+    register(obj, flag, opts)
+    local H, S, V = obj.Value:ToHSV()
+
+    local row = self:_row(24)
+    row.ClipsDescendants = true
+    local head = New("Frame", { Parent = row, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1 })
+    New("TextLabel", { Parent = head, Size = UDim2.new(1, -50, 1, 0), Text = opts.Text or flag, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left })
+    local swatch = New("Frame", {
+        Parent = head, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
+        Size = UDim2.fromOffset(38, 18), BackgroundColor3 = obj.Value,
+    })
+    Corner(swatch, 5); local sst = Stroke(swatch, T.Outline)
+    local headBtn = New("TextButton", { Parent = head, Size = UDim2.fromScale(1, 1), ZIndex = 5 })
+
+    local panel = New("Frame", { Parent = row, Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 0, 136), BackgroundTransparency = 1 })
+    local sv = New("Frame", { Parent = panel, Size = UDim2.new(1, -26, 0, 100), BackgroundColor3 = Color3.fromHSV(H, 1, 1) })
+    Corner(sv, 5); Stroke(sv, T.Outline)
+    local white = New("Frame", { Parent = sv, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1) })
+    Corner(white, 5)
+    New("UIGradient", { Parent = white, Transparency = NumberSequence.new(0, 1) })
+    local black = New("Frame", { Parent = sv, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0) })
+    Corner(black, 5)
+    New("UIGradient", { Parent = black, Rotation = 90, Transparency = NumberSequence.new(1, 0) })
+    local svSel = New("Frame", {
+        Parent = sv, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = obj.Value, ZIndex = 3,
+    })
+    Corner(svSel, 6); Stroke(svSel, Color3.new(1, 1, 1), 2)
+    local svHit = New("TextButton", { Parent = sv, Size = UDim2.fromScale(1, 1), ZIndex = 5 })
+
+    local hueBar = New("Frame", { Parent = panel, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0, 16, 0, 100), BackgroundColor3 = Color3.new(1, 1, 1) })
+    Corner(hueBar, 5); Stroke(hueBar, T.Outline)
+    local keys = {}
+    for i = 0, 6 do table.insert(keys, ColorSequenceKeypoint.new(i / 6, Color3.fromHSV(i == 6 and 0 or i / 6, 1, 1))) end
+    New("UIGradient", { Parent = hueBar, Rotation = 90, Color = ColorSequence.new(keys) })
+    local hueSel = New("Frame", {
+        Parent = hueBar, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(1, 4, 0, 5), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 3,
+    })
+    Corner(hueSel, 3); Stroke(hueSel, Color3.new(0, 0, 0), 1)
+    local hueHit = New("TextButton", { Parent = hueBar, Size = UDim2.fromScale(1, 1), ZIndex = 5 })
+
+    local hex = New("TextBox", {
+        Parent = panel, Position = UDim2.fromOffset(0, 108), Size = UDim2.new(1, 0, 0, 24), BackgroundColor3 = T.Element,
+        Text = hexOf(obj.Value), PlaceholderText = "#RRGGBB", PlaceholderColor3 = T.SubText, ClearTextOnFocus = false,
+    })
+    Corner(hex); local hst = Stroke(hex, T.Outline)
+    hex.Focused:Connect(function() Tween(hst, { Color = Library.Theme.Accent }, 0.2) end)
+
+    local function refresh(silent)
+        local col = Color3.fromHSV(math.min(H, 0.9999), S, V)
+        obj.Value = col
+        Library.Flags[flag] = col
+        Tween(swatch, { BackgroundColor3 = col }, 0.08)
+        sv.BackgroundColor3 = Color3.fromHSV(math.min(H, 0.9999), 1, 1)
+        svSel.Position = UDim2.fromScale(S, 1 - V)
+        svSel.BackgroundColor3 = col
+        hueSel.Position = UDim2.new(0.5, 0, H, 0)
+        if not hex:IsFocused() then hex.Text = hexOf(col) end
+        if not silent then Fire(obj) end
+    end
+
+    function obj:SetValue(c, silent)
+        if type(c) == "string" then c = colorFromHex(c) end
+        if typeof(c) ~= "Color3" then return end
+        local h, s2, v2 = c:ToHSV()
+        if s2 > 0 and v2 > 0 then H = h end
+        S, V = s2, v2
+        refresh(silent)
+    end
+    hex.FocusLost:Connect(function()
+        Tween(hst, { Color = T.Outline }, 0.2)
+        local c = colorFromHex(hex.Text)
+        if c then obj:SetValue(c) else hex.Text = hexOf(obj.Value) end
+    end)
+
+    local mode
+    local function update(pos)
+        if mode == "sv" then
+            S = math.clamp((pos.X - sv.AbsolutePosition.X) / math.max(sv.AbsoluteSize.X, 1), 0, 1)
+            V = 1 - math.clamp((pos.Y - sv.AbsolutePosition.Y) / math.max(sv.AbsoluteSize.Y, 1), 0, 1)
+        elseif mode == "hue" then
+            H = math.clamp((pos.Y - hueBar.AbsolutePosition.Y) / math.max(hueBar.AbsoluteSize.Y, 1), 0, 1)
+        end
+        refresh()
+    end
+    local function begin(m, i)
+        if isPress(i) then
+            mode = m
+            if self.Tab.Scroll then self.Tab.Scroll.ScrollingEnabled = false end
+            update(i.Position)
+        end
+    end
+    svHit.InputBegan:Connect(function(i) begin("sv", i) end)
+    hueHit.InputBegan:Connect(function(i) begin("hue", i) end)
+    Library:Connect(UIS.InputChanged, function(i)
+        if mode and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then update(i.Position) end
+    end)
+    Library:Connect(UIS.InputEnded, function(i)
+        if mode and isPress(i) then
+            mode = nil
+            if self.Tab.Scroll then self.Tab.Scroll.ScrollingEnabled = true end
+        end
+    end)
+
+    headBtn.MouseButton1Click:Connect(function()
+        obj.Open = not obj.Open
+        Tween(row, { Size = UDim2.new(1, 0, 0, obj.Open and 172 or 24) }, 0.25)
+        Tween(sst, { Color = obj.Open and Library.Theme.Accent or T.Outline }, 0.2)
+    end)
+
+    refresh(true)
     return obj
 end
 
@@ -1611,6 +1778,27 @@ function SectionMT:AddKeybind(flag, opts)
     return obj
 end
 
+function Library:_blockUnsafe(name)
+    self:Notify(string.format('"%s" is marked unsafe. Turn on "Allow Unsafe" in Settings to use it.', tostring(name or "This feature")), 4, "Unsafe feature blocked")
+end
+
+function Library:SetAllowUnsafe(v)
+    self.AllowUnsafe = v and true or false
+    if not self.AllowUnsafe then
+        local n = 0
+        for _, t in ipairs(self.UnsafeToggles) do
+            if t.Value then
+                t:SetValue(false, true)
+                for _, cb in ipairs(t.Callbacks) do pcall(cb, false) end
+                n += 1
+            end
+        end
+        if n > 0 then
+            self:Notify(n .. " unsafe feature" .. (n > 1 and "s were" or " was") .. " turned off.", 3.5, "Unsafe disabled")
+        end
+    end
+end
+
 function Library:_closePopup()
     if self.Popup then
         local p = self.Popup
@@ -1650,6 +1838,10 @@ function WindowMT:_buildSettings()
                 lib:Notify("Notifications will appear here", 2.5, v)
             end
         end,
+    })
+    menu:AddToggle("UI_AllowUnsafe", {
+        Text = "Allow Unsafe", Color = UNSAFE_RED, NoSave = true, Default = lib.AllowUnsafe,
+        Callback = function(v) lib:SetAllowUnsafe(v) end,
     })
     menu:AddSlider("UI_Scale", { Text = "UI Scale", Min = 70, Max = 130, Default = 100, Suffix = "%", Callback = function(v) self:SetScale(v / 100) end })
     menu:AddDivider()
@@ -1701,20 +1893,24 @@ function WindowMT:_buildSettings()
     end })
     cfg:AddDivider()
     dd = cfg:AddDropdown("UI_ConfigList", { Text = "Configs", Values = lib:GetConfigs(), NoSave = true })
-    cfg:AddButton({ Text = "Load Config", Callback = function() report(lib:LoadConfig(selected())) end })
     local function needSelection()
         if not selected() then report(false, "No config selected"); return false end
         return true
     end
-    cfg:AddButton({ Text = "Overwrite Config", Confirm = 3, Precheck = needSelection, Callback = function()
-        report(lib:SaveConfig(selected()))
-    end })
-    cfg:AddButton({ Text = "Delete Config", Confirm = 3, Precheck = needSelection, Callback = function()
-        local ok, msg = lib:DeleteConfig(selected())
-        report(ok, msg)
-        if ok then refreshList() end
-    end })
-    cfg:AddButton({ Text = "Refresh List", Callback = refreshList })
+    cfg:AddButtonRow({
+        { Text = "Load", Callback = function() report(lib:LoadConfig(selected())) end },
+        { Text = "Overwrite", Confirm = 3, Precheck = needSelection, Callback = function()
+            report(lib:SaveConfig(selected()))
+        end },
+    })
+    cfg:AddButtonRow({
+        { Text = "Delete", Confirm = 3, Precheck = needSelection, Callback = function()
+            local ok, msg = lib:DeleteConfig(selected())
+            report(ok, msg)
+            if ok then refreshList() end
+        end },
+        { Text = "Refresh", Callback = refreshList },
+    })
     cfg:AddDivider()
     local renameInput = cfg:AddInput("UI_ConfigRename", { Text = "Rename selected to", Placeholder = "new name", NoSave = true })
     cfg:AddButton({ Text = "Rename Config", Callback = function()
@@ -1725,14 +1921,16 @@ function WindowMT:_buildSettings()
         if ok then refreshList(); dd:SetValue(new, true); renameInput:SetValue("") end
     end })
     cfg:AddDivider()
-    cfg:AddButton({ Text = "Set As Auto Load", Callback = function()
-        local ok, msg = lib:SetAutoLoad(selected())
-        report(ok, msg); refreshAuto()
-    end })
-    cfg:AddButton({ Text = "Clear Auto Load", Callback = function()
-        local ok, msg = lib:ClearAutoLoad()
-        report(ok, msg); refreshAuto()
-    end })
+    cfg:AddButtonRow({
+        { Text = "Set Auto Load", Callback = function()
+            local ok, msg = lib:SetAutoLoad(selected())
+            report(ok, msg); refreshAuto()
+        end },
+        { Text = "Clear Auto Load", Callback = function()
+            local ok, msg = lib:ClearAutoLoad()
+            report(ok, msg); refreshAuto()
+        end },
+    })
     autoLabel = cfg:AddLabel("Auto load: none")
     refreshAuto()
 end
