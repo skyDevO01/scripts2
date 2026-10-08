@@ -40,6 +40,7 @@ local Library = {
     LastBind = 0,
     Panels = {},
     UnsafeToggles = {},
+    PendingDependents = {},
     AllowUnsafe = false,
     PanelTransparency = 0.2,
     ThemeName = "Default",
@@ -190,9 +191,21 @@ local function register(obj, flag, opts)
     obj.Flag = flag
     obj.NoSave = opts.NoSave
     obj.Callbacks = {}
-    if flag then Library.Options[flag] = obj end
+    obj.Dependents = {}
+    if flag then
+        Library.Options[flag] = obj
+        -- keybinds created before their master toggle exist wait here
+        local pend = Library.PendingDependents[flag]
+        if pend then
+            Library.PendingDependents[flag] = nil
+            for _, fn in ipairs(pend) do table.insert(obj.Dependents, fn) end
+        end
+    end
     if opts.Callback then table.insert(obj.Callbacks, opts.Callback) end
     function obj:OnChanged(fn) table.insert(self.Callbacks, fn); return self end
+    function obj:_notify()
+        for _, fn in ipairs(self.Dependents) do pcall(fn, self.Value) end
+    end
 end
 
 local function MakeDraggable(handle, target)
@@ -1204,6 +1217,7 @@ function SectionMT:AddToggle(flag, opts)
         Tween(st, { Color = v and onC() or T.Outline }, 0.2)
         Tween(knob, { Position = v and UDim2.new(1, -15, 0.5, 0) or UDim2.new(0, 3, 0.5, 0), BackgroundColor3 = v and Color3.new(1, 1, 1) or T.SubText }, 0.25, Enum.EasingStyle.Back)
         Tween(label, { TextColor3 = labelColor or (v and T.Text or T.SubText) }, 0.2)
+        self:_notify()
         if changed and not silent then Fire(self) end
     end
     hit.MouseButton1Click:Connect(function() obj:SetValue(not obj.Value) end)
@@ -1591,6 +1605,18 @@ function SectionMT:AddKeybind(flag, opts)
     register(obj, flag, opts)
     local text = opts.Text or flag
 
+    local master = opts.Master -- toggle flag (string) or toggle object
+    local function getMaster()
+        if type(master) == "table" then return master end
+        if type(master) == "string" then return Library.Options[master] end
+    end
+    local function masterOn()
+        if master == nil then return true end
+        local m = getMaster()
+        return m ~= nil and m.Value == true
+    end
+    obj.MasterOn = masterOn
+
     local row = self:_row(24)
     New("TextLabel", { Parent = row, Size = UDim2.new(1, -90, 1, 0), Text = text, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left })
     local btn = New("TextButton", {
@@ -1632,6 +1658,7 @@ function SectionMT:AddKeybind(flag, opts)
 
     function obj:SetState(s, silent)
         s = s and true or false
+        if s and not masterOn() then s = false end
         if self.State == s then updateEntry(); return end
         self.State, self.Value = s, s
         Library.Flags[flag] = s
@@ -1764,6 +1791,7 @@ function SectionMT:AddKeybind(flag, opts)
             return
         end
         if gp or opts.Passive or not obj.Key then return end
+        if not masterOn() then return end
         if input.KeyCode == obj.Key or input.UserInputType == obj.Key then
             if obj.Mode == "Toggle" then obj:SetState(not obj.State)
             elseif obj.Mode == "Hold" then obj:SetState(true) end
@@ -1774,9 +1802,28 @@ function SectionMT:AddKeybind(flag, opts)
         if input.KeyCode == obj.Key or input.UserInputType == obj.Key then obj:SetState(false) end
     end)
 
+    local function onMaster()
+        if masterOn() then
+            if obj.Mode == "Always" then obj:SetState(true) end
+        else
+            obj:SetState(false)
+        end
+        btnLabel.TextTransparency = masterOn() and 0 or 0.5 -- dim when disabled
+    end
+    if master ~= nil then
+        local m = getMaster()
+        if m then
+            table.insert(m.Dependents, onMaster)
+        elseif type(master) == "string" then
+            Library.PendingDependents[master] = Library.PendingDependents[master] or {}
+            table.insert(Library.PendingDependents[master], onMaster)
+        end
+    end
+
     obj.Key = opts.Default
     updateButton()
     obj:SetMode(obj.Mode, true)
+    onMaster()
     return obj
 end
 
