@@ -338,18 +338,17 @@ function Library:_init(opts)
 
     -- notifications
     self.NotifyHolder = New("Frame", {
-        Parent = gui, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -14, 1, -14),
-        Size = UDim2.new(0, 260, 1, -28), BackgroundTransparency = 1,
+        Parent = gui, Size = UDim2.new(0, 260, 1, -70), BackgroundTransparency = 1,
     })
-    New("UIListLayout", {
+    self.NotifyLayout = New("UIListLayout", {
         Parent = self.NotifyHolder, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder,
-        HorizontalAlignment = Enum.HorizontalAlignment.Right, VerticalAlignment = Enum.VerticalAlignment.Bottom,
     })
+    self:SetNotifyPosition(opts.NotifyPosition or "Top Right")
 
     -- watermark
     self.WatermarkBase = opts.Title or "SmoothUI"
     local wm = New("Frame", {
-        Parent = gui, Position = UDim2.fromOffset(12, 12), AutomaticSize = Enum.AutomaticSize.XY,
+        Parent = gui, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), AutomaticSize = Enum.AutomaticSize.XY,
         Size = UDim2.fromOffset(0, 0), BackgroundColor3 = T.Panel,
     })
     Corner(wm); Stroke(wm, T.Outline)
@@ -403,6 +402,18 @@ function Library:_init(opts)
         for _, w in ipairs(self.Windows) do w:_fit() end
     end)
 
+    -- click outside an open popup closes it
+    self:Connect(UIS.InputBegan, function(i)
+        if self.Popup and (isPress(i) or i.UserInputType == Enum.UserInputType.MouseButton2) then
+            local f = self.Popup.frame
+            local p, s, pos = f.AbsolutePosition, f.AbsoluteSize, i.Position
+            -- AbsolutePosition is already the top-left corner, whatever the anchor point
+            if pos.X < p.X or pos.X > p.X + s.X or pos.Y < p.Y or pos.Y > p.Y + s.Y then
+                self:_closePopup()
+            end
+        end
+    end)
+
     -- menu toggle key
     self:Connect(UIS.InputBegan, function(i, gp)
         if gp or self.Unloaded then return end
@@ -429,7 +440,7 @@ end
 function Library:_makeToggleButton()
     local T = self.Theme
     local btn = New("Frame", {
-        Parent = self.Gui, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10),
+        Parent = self.Gui, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
         Size = UDim2.fromOffset(44, 44), BackgroundColor3 = T.Panel, Visible = false,
     })
     Corner(btn, 22)
@@ -510,6 +521,31 @@ function Library:SetWatermark(text) self.WatermarkBase = text end
 function Library:SetWatermarkVisible(v) if self.Watermark then self.Watermark.Visible = v end end
 function Library:SetKeybindListVisible(v) if self.KeybindFrame then self.KeybindFrame.Visible = v end end
 
+Library.NotifyPositions = { "Top Left", "Top Center", "Top Right", "Bottom Left", "Bottom Center", "Bottom Right" }
+
+function Library:SetNotifyPosition(name)
+    local top = name:find("Top") ~= nil
+    local x = name:find("Left") and 0 or (name:find("Right") and 1 or 0.5)
+    if not (name:find("Top") or name:find("Bottom")) then return false end
+    self.NotifyPosition = name
+    self._notifyTop, self._notifyX = top, x
+    local yOff = top and ((x == 0.5) and 54 or 14) or -14 -- top center sits below the watermark
+    local xOff = x == 0 and 14 or (x == 1 and -14 or 0)
+    self.NotifyHolder.AnchorPoint = Vector2.new(x, top and 0 or 1)
+    self.NotifyHolder.Position = UDim2.new(x, xOff, top and 0 or 1, yOff)
+    self.NotifyLayout.HorizontalAlignment = x == 0 and Enum.HorizontalAlignment.Left
+        or (x == 1 and Enum.HorizontalAlignment.Right or Enum.HorizontalAlignment.Center)
+    self.NotifyLayout.VerticalAlignment = top and Enum.VerticalAlignment.Top or Enum.VerticalAlignment.Bottom
+    return true
+end
+
+-- off-screen position a notification slides from / to
+function Library:_notifyHidden()
+    if self._notifyX == 0 then return UDim2.fromOffset(-300, 0) end
+    if self._notifyX == 1 then return UDim2.fromOffset(300, 0) end
+    return UDim2.fromOffset(0, self._notifyTop and -80 or 80)
+end
+
 function Library:Notify(text, duration, title)
     if not self.Gui then return end
     local T = self.Theme
@@ -519,7 +555,7 @@ function Library:Notify(text, duration, title)
         BackgroundTransparency = 1, LayoutOrder = math.floor(os.clock() * 100),
     })
     local inner = New("Frame", {
-        Parent = holder, Position = UDim2.new(1, 40, 0, 0), Size = UDim2.new(1, 0, 0, 0),
+        Parent = holder, Position = self:_notifyHidden(), Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = T.Panel, ClipsDescendants = true,
     })
     Corner(inner); Stroke(inner, T.Outline)
@@ -538,7 +574,7 @@ function Library:Notify(text, duration, title)
     Tween(bar, { Size = UDim2.new(0, 0, 0, 2) }, duration, Enum.EasingStyle.Linear)
     task.delay(duration, function()
         if not inner.Parent then return end
-        Tween(inner, { Position = UDim2.new(1, 40, 0, 0) }, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+        Tween(inner, { Position = self:_notifyHidden() }, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
         task.wait(0.32)
         holder:Destroy()
     end)
@@ -851,6 +887,7 @@ function WindowMT:SetVisible(v)
     self._tok = (self._tok or 0) + 1
     local tok = self._tok
     self.Library:_syncToggleBtn()
+    if not v then self.Library:_closePopup() end
     if v then
         self.Holder.Visible = true
         Tween(self.Scale, { Scale = self.BaseScale }, 0.4, Enum.EasingStyle.Back)
@@ -1377,7 +1414,7 @@ function SectionMT:AddInput(flag, opts)
 end
 
 -- Keybind -------------------------------------------------------------
-local MODES = { "Toggle", "Hold", "Always" }
+local MODES = { "Hold", "Toggle", "Always" }
 function SectionMT:AddKeybind(flag, opts)
     opts = opts or {}
     local T = Library.Theme
@@ -1449,6 +1486,63 @@ function SectionMT:AddKeybind(flag, opts)
     end
     function obj:GetState() return self.State end
 
+    -- small popup with Hold / Toggle / Always, anchored under the key button
+    local function openModeMenu()
+        Library:_closePopup()
+        local win = self.Tab and self.Tab.Window
+        local base = (win and win.BaseScale) or 1
+        local itemH = 26
+        local w, h = 112, #MODES * itemH + 8
+        local pop = New("Frame", { Parent = Library.Gui, AnchorPoint = Vector2.new(1, 0), Size = UDim2.fromOffset(w, h), BackgroundTransparency = 1, ZIndex = 50 })
+        Corner(pop, 8)
+        local ps = Stroke(pop, Library.Theme.Accent, 1, 1)
+        local sc = New("UIScale", { Parent = pop, Scale = base * 0.9 })
+        local grp = New("CanvasGroup", { Parent = pop, Size = UDim2.fromScale(1, 1), BackgroundColor3 = T.Panel, GroupTransparency = 1 })
+        Corner(grp, 8); List(grp, 2); Pad(grp, 4, 4, 4, 4)
+
+        local ap, as = btn.AbsolutePosition, btn.AbsoluteSize
+        local gs = Library.Gui.AbsoluteSize
+        local x, y = ap.X + as.X, ap.Y + as.Y + 4
+        if y + h * base > gs.Y - 8 then y = ap.Y - h * base - 4 end
+        pop.Position = UDim2.fromOffset(x, y)
+
+        for idx, m in ipairs(MODES) do
+            local item = New("TextButton", { Parent = grp, Size = UDim2.new(1, 0, 0, itemH - 2), BackgroundColor3 = T.ElementHover, BackgroundTransparency = 1, LayoutOrder = idx })
+            Corner(item, 5)
+            local cur = obj.Mode == m
+            New("TextLabel", {
+                Parent = item, Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -12, 1, 0), Text = m,
+                TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = cur and Library.Theme.Accent or T.SubText,
+            })
+            if cur then
+                local bar = New("Frame", { Parent = item, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 3, 0.5, 0), Size = UDim2.fromOffset(3, 12) })
+                Corner(bar, 2); Library:Accent(bar)
+            end
+            item.MouseEnter:Connect(function() Tween(item, { BackgroundTransparency = 0.4 }, 0.12) end)
+            item.MouseLeave:Connect(function() Tween(item, { BackgroundTransparency = 1 }, 0.12) end)
+            item.MouseButton1Click:Connect(function()
+                obj:SetMode(m)
+                Library:_closePopup()
+            end)
+        end
+
+        Tween(sc, { Scale = base }, 0.3, Enum.EasingStyle.Back)
+        Tween(grp, { GroupTransparency = 0 }, 0.18)
+        Tween(ps, { Transparency = 0.4 }, 0.18)
+        local closed = false
+        Library.Popup = {
+            frame = pop,
+            close = function()
+                if closed then return end
+                closed = true
+                Tween(sc, { Scale = base * 0.92 }, 0.15)
+                Tween(grp, { GroupTransparency = 1 }, 0.15)
+                Tween(ps, { Transparency = 1 }, 0.15)
+                task.delay(0.17, function() pop:Destroy() end)
+            end,
+        }
+    end
+
     local pressStart, longPressed = 0, false
     btn.InputBegan:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.Touch and Library.Mobile and not opts.Passive then
@@ -1457,15 +1551,14 @@ function SectionMT:AddKeybind(flag, opts)
             task.delay(0.5, function()
                 if pressStart == t0 and not longPressed then
                     longPressed = true
-                    local k = table.find(MODES, obj.Mode) or 1
-                    obj:SetMode(MODES[k % #MODES + 1])
+                    openModeMenu()
                 end
             end)
         end
     end)
     btn.MouseButton1Click:Connect(function()
         if Library.Mobile and not opts.Passive then
-            -- touch: tap flips the state (Toggle / Hold), hold 0.5s cycles the mode
+            -- touch: tap flips the state (Toggle / Hold), hold 0.5s opens the mode menu
             pressStart = 0
             if longPressed then longPressed = false return end
             if obj.Mode ~= "Always" then obj:SetState(not obj.State) end
@@ -1478,8 +1571,7 @@ function SectionMT:AddKeybind(flag, opts)
     end)
     btn.MouseButton2Click:Connect(function()
         if opts.Passive or obj.Binding then return end
-        local i = table.find(MODES, obj.Mode) or 1
-        obj:SetMode(MODES[i % #MODES + 1])
+        openModeMenu() -- right click: choose Hold / Toggle / Always
     end)
     btn.MouseEnter:Connect(function() Tween(btn, { BackgroundColor3 = T.ElementHover }, 0.15) end)
     btn.MouseLeave:Connect(function() Tween(btn, { BackgroundColor3 = T.Element }, 0.15) end)
@@ -1519,6 +1611,14 @@ function SectionMT:AddKeybind(flag, opts)
     return obj
 end
 
+function Library:_closePopup()
+    if self.Popup then
+        local p = self.Popup
+        self.Popup = nil
+        p.close()
+    end
+end
+
 function Library:_nextKbOrder()
     self._kbOrder = (self._kbOrder or 0) + 1
     return self._kbOrder
@@ -1541,6 +1641,15 @@ function WindowMT:_buildSettings()
     menu:AddKeybind("UI_MenuKey", {
         Text = "Menu Keybind", Default = lib.ToggleKey, Passive = true, NoList = true,
         ChangedCallback = function(k) lib.ToggleKey = k or Enum.KeyCode.RightShift end,
+    })
+    menu:AddDropdown("UI_NotifyPos", {
+        Text = "Notification Position", Values = lib.NotifyPositions, Default = lib.NotifyPosition,
+        Callback = function(v)
+            if v and v ~= lib.NotifyPosition then
+                lib:SetNotifyPosition(v)
+                lib:Notify("Notifications will appear here", 2.5, v)
+            end
+        end,
     })
     menu:AddSlider("UI_Scale", { Text = "UI Scale", Min = 70, Max = 130, Default = 100, Suffix = "%", Callback = function(v) self:SetScale(v / 100) end })
     menu:AddDivider()
