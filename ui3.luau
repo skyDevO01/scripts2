@@ -1,6 +1,11 @@
+--[[
+    A ui lib made for BlueLight Hub
+]]
+
+-- unload any previous copy
 local env = (getgenv and getgenv()) or _G
-if env.__SmoothUI and type(env.__SmoothUI.Unload) == "function" then
-    pcall(function() env.__SmoothUI:Unload() end)
+if env.__BlueLightHub and type(env.__BlueLightHub.Unload) == "function" then
+    pcall(function() env.__BlueLightHub:Unload() end)
 end
 
 local cloneref = cloneref or function(i) return i end
@@ -36,7 +41,7 @@ local Library = {
     AccentFns = {},
     Unloaded = false,
     ToggleKey = Enum.KeyCode.RightShift,
-    Folder = "SmoothUI",
+    Folder = "BlueLightHub",
     LastBind = 0,
     Panels = {},
     UnsafeToggles = {},
@@ -191,7 +196,7 @@ end
 local function Fire(obj)
     for _, cb in ipairs(obj.Callbacks) do
         local ok, err = pcall(cb, obj.Value)
-        if not ok then warn("[SmoothUI] callback error (" .. tostring(obj.Flag) .. "): " .. tostring(err)) end
+        if not ok then warn("[BlueLight Hub] callback error (" .. tostring(obj.Flag) .. "): " .. tostring(err)) end
     end
 end
 
@@ -337,7 +342,7 @@ function Library:Unload()
     self.Unloaded = true
     for _, cb in ipairs(self.UnloadCallbacks) do
         local ok, err = pcall(cb)
-        if not ok then warn("[SmoothUI] OnUnload error: " .. tostring(err)) end
+        if not ok then warn("[BlueLight Hub] OnUnload error: " .. tostring(err)) end
     end
     for _, w in ipairs(self.Windows) do pcall(function() w:SetVisible(false) end) end
     if self.Watermark then Tween(self.Watermark, { BackgroundTransparency = 1 }, 0.2); self.Watermark.Visible = false end
@@ -347,13 +352,13 @@ function Library:Unload()
     task.delay(0.35, function()
         if self.Gui then self.Gui:Destroy() end
     end)
-    if env.__SmoothUI == self then env.__SmoothUI = nil end
+    if env.__BlueLightHub == self then env.__BlueLightHub = nil end
 end
 
 function Library:_init(opts)
     if self.Gui then return end
     local T = self.Theme
-    self.Folder = opts.ConfigFolder or opts.Title or "SmoothUI"
+    self.Folder = opts.ConfigFolder or opts.Title or "BlueLightHub"
     if opts.Keybind then self.ToggleKey = opts.Keybind end
     -- mobile mode: auto (touch device without keyboard) unless opts.Mobile is set
     if opts.Mobile ~= nil then self.Mobile = opts.Mobile and true or false
@@ -364,6 +369,11 @@ function Library:_init(opts)
     self.MobileSize = opts.MobileSize or Vector2.new(600, 340) -- max window footprint (px) in mobile mode
     self._showToggleBtn = opts.ToggleButton
     if self._showToggleBtn == nil then self._showToggleBtn = self.Mobile end
+    -- start minimized: the window stays closed on load and only the menu button is shown (open it with the button / menu key)
+    self._startMinimized = (opts.StartMinimized == true) or (opts.Startup == "Minimized")
+    if self._startMinimized and opts.ToggleButton == nil then self._showToggleBtn = true end
+    -- KeybindList = true / false: initial visibility of the keybind list (nil = hidden on mobile, shown on PC)
+    self._kbListOpt = opts.KeybindList
     if opts.Theme and self.Themes[opts.Theme] then
         for k, v in pairs(self.Themes[opts.Theme]) do self.Theme[k] = v end
         self.ThemeName = opts.Theme
@@ -386,7 +396,7 @@ function Library:_init(opts)
     self:SetNotifyPosition(opts.NotifyPosition or "Top Right")
 
     -- watermark
-    self.WatermarkBase = opts.Title or "SmoothUI"
+    self.WatermarkBase = opts.Title or "BlueLight Hub"
     local wm = New("Frame", {
         Parent = gui, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), AutomaticSize = Enum.AutomaticSize.XY,
         Size = UDim2.fromOffset(0, 0), BackgroundColor3 = T.Panel,
@@ -425,7 +435,8 @@ function Library:_init(opts)
     -- floating button that opens / closes the menu (draggable)
     self:_makeToggleButton()
     self:SetToggleButtonVisible(self._showToggleBtn)
-    if self.Mobile then self:SetKeybindListVisible(false) end
+    if self._kbListOpt ~= nil then self:SetKeybindListVisible(self._kbListOpt and true or false)
+    elseif self.Mobile then self:SetKeybindListVisible(false) end
 
     if self._autoMobile then
         self:Connect(UIS.LastInputTypeChanged, function(t)
@@ -508,13 +519,31 @@ function Library:_makeToggleButton()
     Corner(btn, 22)
     local st = Stroke(btn, T.Outline, 2)
     local sc = New("UIScale", { Parent = btn, Scale = 1 })
-    for i = 0, 2 do
-        local bar = New("Frame", {
-            Parent = btn, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14 + i * 6),
-            Size = UDim2.fromOffset(i == 1 and 12 or 18, 3),
-        })
-        Corner(bar, 2); self:Accent(bar)
-    end
+    -- "blue light" icon: a soft pulsing halo around a bright blue core
+    local BLUE = Color3.fromRGB(80, 170, 255)
+    local halo = New("Frame", {
+        Parent = btn, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(30, 30), BackgroundColor3 = BLUE, BackgroundTransparency = 0.7,
+    })
+    Corner(halo, 20)
+    local core = New("Frame", {
+        Parent = btn, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(16, 16), BackgroundColor3 = BLUE,
+    })
+    Corner(core, 8)
+    local spark = New("Frame", {
+        Parent = btn, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(6, 6), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.15,
+    })
+    Corner(spark, 3)
+    task.spawn(function()
+        while not self.Unloaded and halo.Parent do
+            Tween(halo, { Size = UDim2.fromOffset(40, 40), BackgroundTransparency = 0.88 }, 1.2, Enum.EasingStyle.Sine)
+            task.wait(1.2)
+            Tween(halo, { Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 0.7 }, 1.2, Enum.EasingStyle.Sine)
+            task.wait(1.2)
+        end
+    end)
     local hit = New("TextButton", { Parent = btn, Size = UDim2.fromScale(1, 1), ZIndex = 5 })
     self.ToggleBtn, self.ToggleBtnStroke, self.ToggleBtnScale = btn, st, sc
 
@@ -830,7 +859,7 @@ function Library:CreateWindow(opts)
     local sz = opts.Size or UDim2.fromOffset(580, 420)
     Window.BaseW, Window.BaseH = sz.X.Offset, sz.Y.Offset
     Window.AutoSize = opts.AutoSize ~= false and sz.X.Scale == 0 and sz.Y.Scale == 0
-    Window.TitleNeed = textW((opts.Title or "SmoothUI") .. (opts.Subtitle and (" " .. opts.Subtitle) or ""), 14, Enum.Font.GothamBold) + 30 + 80
+    Window.TitleNeed = textW((opts.Title or "BlueLight Hub") .. (opts.Subtitle and (" " .. opts.Subtitle) or ""), 14, Enum.Font.GothamBold) + 30 + 110
 
     -- custom background (image + dim overlay), sits behind everything else
     Window.BgDim = 0.45
@@ -852,13 +881,26 @@ function Library:CreateWindow(opts)
     Corner(dot, 4); self:Accent(dot)
     local sub = opts.Subtitle and string.format(' <font color="rgb(%d,%d,%d)">%s</font>', T.SubText.R * 255, T.SubText.G * 255, T.SubText.B * 255, opts.Subtitle) or ""
     New("TextLabel", {
-        Parent = top, Position = UDim2.fromOffset(30, 0), Size = UDim2.new(1, -80, 1, 0), RichText = true,
-        Text = (opts.Title or "SmoothUI") .. sub, Font = Enum.Font.GothamBold, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = top, Position = UDim2.fromOffset(30, 0), Size = UDim2.new(1, -110, 1, 0), RichText = true,
+        Text = (opts.Title or "BlueLight Hub") .. sub, Font = Enum.Font.GothamBold, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left,
     })
     local close = New("TextButton", {
         Parent = top, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(24, 24),
         Text = "×", TextSize = 20, TextColor3 = T.SubText,
     })
+    -- minimize: hides the window and makes sure the menu button is there to bring it back
+    local minimize = New("TextButton", {
+        Parent = top, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -38, 0.5, 0), Size = UDim2.fromOffset(24, 24),
+        Text = "–", TextSize = 18, TextColor3 = T.SubText,
+    })
+    minimize.MouseEnter:Connect(function() Tween(minimize, { TextColor3 = T.Text }, 0.15) end)
+    minimize.MouseLeave:Connect(function() Tween(minimize, { TextColor3 = T.SubText }, 0.15) end)
+    minimize.MouseButton1Click:Connect(function()
+        Window:SetVisible(false)
+        self:SetToggleButtonVisible(true)
+        local o = self.Options.UI_ToggleBtn
+        if o then o:SetValue(true, true) end
+    end)
     close.MouseEnter:Connect(function() Tween(close, { TextColor3 = Color3.fromRGB(255, 90, 100) }, 0.15) end)
     close.MouseLeave:Connect(function() Tween(close, { TextColor3 = T.SubText }, 0.15) end)
     close.MouseButton1Click:Connect(function()
@@ -943,7 +985,14 @@ function Library:CreateWindow(opts)
     Window.UserScale = 1
     Window:_fit()
     Window:_buildSettings()
-    task.defer(function() Window:SetVisible(true) end)
+    task.defer(function()
+        if self._startMinimized then
+            self:SetToggleButtonVisible(true)
+            self:Notify("Press " .. keyName(self.ToggleKey) .. " or tap the BlueLight button to open the menu", 4, "Loaded")
+        else
+            Window:SetVisible(true)
+        end
+    end)
     Window:_queueFit()
     return Window
 end
@@ -1266,7 +1315,7 @@ function SectionMT:AddButton(opts, cb)
     local function run()
         if opts.Callback then
             local ok, err = pcall(opts.Callback)
-            if not ok then warn("[SmoothUI] button error: " .. tostring(err)) end
+            if not ok then warn("[BlueLight Hub] button error: " .. tostring(err)) end
         end
     end
     local function disarm()
@@ -2121,7 +2170,7 @@ function WindowMT:_buildSettings()
     -- Menu -------------------------------------------------------------
     local menu = tab:AddSection("Menu", "Left")
     menu:AddToggle("UI_Watermark", { Text = "Show Watermark", Default = true, Callback = function(v) lib:SetWatermarkVisible(v) end })
-    menu:AddToggle("UI_KeybindList", { Text = "Show Keybind List", Default = not lib.Mobile, Callback = function(v) lib:SetKeybindListVisible(v) end })
+    menu:AddToggle("UI_KeybindList", { Text = "Show Keybind List", Default = (lib._kbListOpt ~= nil) and (lib._kbListOpt and true or false) or not lib.Mobile, Callback = function(v) lib:SetKeybindListVisible(v) end })
     menu:AddToggle("UI_Mobile", { Text = "Mobile Mode", Default = lib.Mobile, Callback = function(v) lib._autoMobile = false; lib:SetMobile(v) end })
     menu:AddToggle("UI_ToggleBtn", { Text = "Show Menu Button", Default = lib._showToggleBtn, Callback = function(v) lib:SetToggleButtonVisible(v) end })
     menu:AddKeybind("UI_MenuKey", {
@@ -2233,5 +2282,5 @@ function WindowMT:_buildSettings()
     refreshAuto()
 end
 
-env.__SmoothUI = Library
+env.__BlueLightHub = Library
 return Library
