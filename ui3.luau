@@ -361,6 +361,7 @@ function Library:_init(opts)
     -- while auto, the mode follows the device live (touch input -> mobile, mouse / keyboard -> PC) until the
     -- user flips "Mobile Mode" by hand in Settings
     self._autoMobile = (opts.Mobile == nil)
+    self.MobileSize = opts.MobileSize or Vector2.new(600, 340) -- max window footprint (px) in mobile mode
     self._showToggleBtn = opts.ToggleButton
     if self._showToggleBtn == nil then self._showToggleBtn = self.Mobile end
     if opts.Theme and self.Themes[opts.Theme] then
@@ -556,14 +557,21 @@ end
 function Library:SetToggleButtonVisible(v)
     if not self.ToggleBtn then return end
     v = v and true or false
-    if v and not self.ToggleBtn.Visible then
+    -- token: a newer show / hide call cancels the pending "set Visible = false" of an older one
+    -- (this is what made the button stay hidden when toggled off and on again)
+    self._btnTok = (self._btnTok or 0) + 1
+    local tok = self._btnTok
+    self._showToggleBtn = v
+    if v then
+        if not self.ToggleBtn.Visible then self.ToggleBtnScale.Scale = 0 end
         self.ToggleBtn.Visible = true
-        self.ToggleBtnScale.Scale = 0
         Tween(self.ToggleBtnScale, { Scale = 1 }, 0.4, Enum.EasingStyle.Back)
-    elseif not v and self.ToggleBtn.Visible then
+    else
         Tween(self.ToggleBtnScale, { Scale = 0 }, 0.2)
-        task.delay(0.22, function()
-            if self.ToggleBtn and self.ToggleBtn.Parent and self.ToggleBtnScale.Scale == 0 then self.ToggleBtn.Visible = false end
+        task.delay(0.24, function()
+            if self._btnTok == tok and self.ToggleBtn and self.ToggleBtn.Parent then
+                self.ToggleBtn.Visible = false
+            end
         end)
     end
     self:_syncToggleBtn()
@@ -571,10 +579,11 @@ end
 
 function Library:SetMobile(v)
     self.Mobile = v and true or false
-    for _, w in ipairs(self.Windows) do w:_fit() end
+    for _, w in ipairs(self.Windows) do w:_fit(); w:_queueFit() end
     if self.Mobile then
+        self:SetToggleButtonVisible(true)
         local o = self.Options.UI_ToggleBtn
-        if o then o:SetValue(true) else self:SetToggleButtonVisible(true) end
+        if o then o:SetValue(true, true) end -- keep the Settings switch in sync (silent: already applied above)
     end
 end
 
@@ -878,6 +887,52 @@ function Library:CreateWindow(opts)
         Parent = main, Position = UDim2.new(0, 10, 0, 82), Size = UDim2.new(1, -20, 1, -92), BackgroundTransparency = 1,
     })
 
+    -- resize grip (bottom-right corner): drag to resize the window. Disable with Resizable = false.
+    if opts.Resizable ~= false then
+        local grip = New("TextButton", {
+            Parent = main, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -3, 1, -3), Size = UDim2.fromOffset(20, 20),
+            Text = "◢", TextSize = 13, TextColor3 = T.SubText, ZIndex = 50,
+        })
+        grip.MouseEnter:Connect(function() Tween(grip, { TextColor3 = T.Text }, 0.15) end)
+        grip.MouseLeave:Connect(function() Tween(grip, { TextColor3 = T.SubText }, 0.15) end)
+        local resizing, startMouse, startSize, startPos = false, nil, nil, nil
+        grip.InputBegan:Connect(function(i)
+            if isPress(i) then
+                resizing = true
+                startMouse = Vector2.new(i.Position.X, i.Position.Y)
+                startSize = Vector2.new(holder.Size.X.Offset, holder.Size.Y.Offset)
+                startPos = holder.Position
+                if Window.Library.Popup then Window.Library:_closePopup() end
+            end
+        end)
+        self:Connect(UIS.InputChanged, function(i)
+            if resizing and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+                local s = math.max(Window.BaseScale, 0.05)
+                local d = (Vector2.new(i.Position.X, i.Position.Y) - startMouse) / s
+                local cam = workspace.CurrentCamera
+                local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
+                local w = math.clamp(startSize.X + d.X, 380, math.max(380, vp.X / s - 10))
+                local h = math.clamp(startSize.Y + d.Y, 260, math.max(260, vp.Y / s - 10))
+                holder.Size = UDim2.fromOffset(w, h)
+                -- keep the top-left corner where it was (the window is center-anchored)
+                holder.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + (w - startSize.X) * s / 2,
+                    startPos.Y.Scale, startPos.Y.Offset + (h - startSize.Y) * s / 2)
+                Window.BaseW, Window.BaseH = w, h
+            end
+        end)
+        self:Connect(UIS.InputEnded, function(i)
+            if resizing and isPress(i) then
+                resizing = false
+                if self.Mobile then
+                    -- remember the chosen footprint so mobile auto-scaling keeps this size
+                    local fitCur = Window.BaseScale / (Window.UserScale or 1)
+                    self.MobileSize = Vector2.new(holder.Size.X.Offset * fitCur, holder.Size.Y.Offset * fitCur)
+                end
+                Window:_fit()
+            end
+        end)
+    end
+
     table.insert(self.Windows, Window)
     Window.UserScale = 1
     Window:_fit()
@@ -968,13 +1023,18 @@ end
 function WindowMT:_fit()
     local fit = 1
     if self.Library.Mobile then
-        local cam = workspace.CurrentCamera
-        if cam then
-            local vp = cam.ViewportSize
-            local w, h = self.Holder.Size.X.Offset, self.Holder.Size.Y.Offset
-            if w > 0 and h > 0 then
-                fit = math.clamp(math.min((vp.X - 16) / w, (vp.Y - 16) / h), 0.4, 1)
+        -- mobile mode shrinks the window to a compact footprint (Library.MobileSize, or CreateWindow's MobileSize)
+        -- and never lets it exceed the screen
+        local w, h = self.Holder.Size.X.Offset, self.Holder.Size.Y.Offset
+        if w > 0 and h > 0 then
+            local ms = self.Library.MobileSize
+            fit = math.min(ms.X / w, ms.Y / h)
+            local cam = workspace.CurrentCamera
+            if cam then
+                local vp = cam.ViewportSize
+                fit = math.min(fit, (vp.X - 16) / w, (vp.Y - 16) / h)
             end
+            fit = math.clamp(fit, 0.4, 1)
         end
     end
     local s = (self.UserScale or 1) * fit
