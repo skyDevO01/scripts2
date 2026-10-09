@@ -873,14 +873,20 @@ function Library:CreateWindow(opts)
     New("Frame", { Parent = main, Position = UDim2.new(0, 0, 0, 38), Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = T.Outline })
 
     -- tab bar (horizontal)
+    -- the tab bar sits in a rounded panel, styled like the sections
+    local tabPanel = New("Frame", {
+        Parent = main, Position = UDim2.fromOffset(10, 44), Size = UDim2.new(1, -20, 0, 30),
+        BackgroundColor3 = T.Panel, BackgroundTransparency = Library.PanelTransparency,
+    })
+    table.insert(Library.Panels, tabPanel)
+    Corner(tabPanel, 8); Stroke(tabPanel, T.Outline)
     local tabBar = New("ScrollingFrame", {
-        Parent = main, Position = UDim2.new(0, 0, 0, 39), Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1,
+        Parent = tabPanel, Position = UDim2.new(0, 0, 0, 0), Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
         ScrollBarThickness = 0, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X,
         ScrollingDirection = Enum.ScrollingDirection.X,
     })
-    local indicator = New("Frame", { Parent = tabBar, Position = UDim2.fromOffset(10, 28), Size = UDim2.fromOffset(20, 2) })
+    local indicator = New("Frame", { Parent = tabBar, Position = UDim2.fromOffset(10, 25), Size = UDim2.fromOffset(20, 2) })
     Corner(indicator, 2); self:Accent(indicator)
-    New("Frame", { Parent = main, Position = UDim2.new(0, 0, 0, 71), Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = T.Outline })
     Window.TabBar, Window.Indicator = tabBar, indicator
 
     Window.Content = New("Frame", {
@@ -1079,7 +1085,7 @@ function WindowMT:_relayoutTabs()
     end
     if self.Current then
         Tween(self.Indicator, {
-            Position = UDim2.fromOffset(self.Current.X + 10, 28),
+            Position = UDim2.fromOffset(self.Current.X + 10, 25),
             Size = UDim2.fromOffset(self.Current.Width - 20, 2),
         }, 0.3)
     end
