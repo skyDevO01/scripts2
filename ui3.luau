@@ -147,6 +147,14 @@ local function isPress(i)
     return i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch
 end
 
+-- width in pixels of a piece of text (used to auto-fit the window to its labels)
+local function textW(s, size, font)
+    local ok, v = pcall(function()
+        return TextService:GetTextSize(tostring(s), size or 13, font or Enum.Font.GothamMedium, Vector2.new(2000, 100)).X
+    end)
+    return ok and v or (#tostring(s) * 7.5)
+end
+
 local UNSAFE_RED = Color3.fromRGB(255, 70, 80)
 
 local function keyToString(k) return k and tostring(k) or "None" end
@@ -350,6 +358,9 @@ function Library:_init(opts)
     -- mobile mode: auto (touch device without keyboard) unless opts.Mobile is set
     if opts.Mobile ~= nil then self.Mobile = opts.Mobile and true or false
     else self.Mobile = UIS.TouchEnabled and not UIS.KeyboardEnabled end
+    -- while auto, the mode follows the device live (touch input -> mobile, mouse / keyboard -> PC) until the
+    -- user flips "Mobile Mode" by hand in Settings
+    self._autoMobile = (opts.Mobile == nil)
     self._showToggleBtn = opts.ToggleButton
     if self._showToggleBtn == nil then self._showToggleBtn = self.Mobile end
     if opts.Theme and self.Themes[opts.Theme] then
@@ -414,6 +425,28 @@ function Library:_init(opts)
     self:_makeToggleButton()
     self:SetToggleButtonVisible(self._showToggleBtn)
     if self.Mobile then self:SetKeybindListVisible(false) end
+
+    if self._autoMobile then
+        self:Connect(UIS.LastInputTypeChanged, function(t)
+            if not self._autoMobile or self.Unloaded then return end
+            local m
+            if t == Enum.UserInputType.Touch then
+                m = true
+            elseif t == Enum.UserInputType.Keyboard or t == Enum.UserInputType.MouseMovement
+                or t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.MouseButton2 then
+                -- a real phone / tablet (touch, no keyboard) stays in mobile mode
+                m = UIS.TouchEnabled and not UIS.KeyboardEnabled
+            else
+                return
+            end
+            if m ~= self.Mobile then
+                self:SetMobile(m)
+                local o = self.Options.UI_Mobile
+                if o then o:SetValue(m, true) end
+                for _, w in ipairs(self.Windows) do w:_queueFit() end
+            end
+        end)
+    end
 
     -- keep the window fitted to the screen in mobile mode
     local function hookCamera()
@@ -783,6 +816,13 @@ function Library:CreateWindow(opts)
 
     Window.Holder, Window.Main, Window.Scale, Window.HolderStroke = holder, main, scale, holderStroke
 
+    -- auto-fit: the window grows (never shrinks below `Size`) so labels / content are fully visible.
+    -- Disable with AutoSize = false, or by giving Size in scale units.
+    local sz = opts.Size or UDim2.fromOffset(580, 420)
+    Window.BaseW, Window.BaseH = sz.X.Offset, sz.Y.Offset
+    Window.AutoSize = opts.AutoSize ~= false and sz.X.Scale == 0 and sz.Y.Scale == 0
+    Window.TitleNeed = textW((opts.Title or "SmoothUI") .. (opts.Subtitle and (" " .. opts.Subtitle) or ""), 14, Enum.Font.GothamBold) + 30 + 80
+
     -- custom background (image + dim overlay), sits behind everything else
     Window.BgDim = 0.45
     Window.BgImage = New("ImageLabel", {
@@ -843,7 +883,44 @@ function Library:CreateWindow(opts)
     Window:_fit()
     Window:_buildSettings()
     task.defer(function() Window:SetVisible(true) end)
+    Window:_queueFit()
     return Window
+end
+
+-- debounced: runs a couple of frames after the last element was added (layout needs a frame to settle)
+function WindowMT:_queueFit()
+    if not self.AutoSize or self._fitQueued then return end
+    self._fitQueued = true
+    task.spawn(function()
+        RunService.Heartbeat:Wait()
+        RunService.Heartbeat:Wait()
+        self._fitQueued = false
+        if self.Library.Unloaded then return end
+        self:_autoSize()
+    end)
+end
+
+function WindowMT:_autoSize()
+    if not self.AutoSize then return end
+    local lib = self.Library
+    local colNeed, hNeed = 0, 0
+    local s = math.max(self.Scale.Scale, 0.01)
+    for _, tab in ipairs(self.Tabs) do
+        for _, sec in ipairs(tab.Sections) do colNeed = math.max(colNeed, (sec.NeedW or 0) + 20) end
+        local h = math.max(tab.LeftLayout.AbsoluteContentSize.Y, tab.RightLayout.AbsoluteContentSize.Y) / s + 6
+        hNeed = math.max(hNeed, h + 92)
+    end
+    local wNeed = math.max(colNeed * 2 + 10 + 20 + 6, self.TitleNeed or 0)
+    local cam = workspace.CurrentCamera
+    local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
+    local us = self.UserScale or 1
+    -- on mobile the whole window is scaled down to the screen by :_fit, so it may be larger than the viewport
+    local maxW = lib.Mobile and math.max(self.BaseW, 900) or math.max(self.BaseW, vp.X / us - 40)
+    local maxH = lib.Mobile and math.max(self.BaseH, 640) or math.max(self.BaseH, vp.Y * 0.9 / us - 40)
+    local w = math.clamp(math.ceil(wNeed), self.BaseW, maxW)
+    local h = math.clamp(math.ceil(hNeed), self.BaseH, maxH)
+    self.Holder.Size = UDim2.fromOffset(w, h)
+    self:_fit()
 end
 
 function WindowMT:_applyDim()
@@ -1042,6 +1119,13 @@ function TabMT:AddSection(name, side)
     return sec
 end
 
+-- an element tells its section how much inner width it needs; the window grows to fit (see WindowMT:_autoSize)
+function SectionMT:_need(w)
+    if w > (self.NeedW or 0) then self.NeedW = w end
+    local win = self.Tab and self.Tab.Window
+    if win then win:_queueFit() end
+end
+
 function SectionMT:_order() self.Count += 1; return self.Count end
 function SectionMT:_row(h)
     return New("Frame", { Parent = self.Container, Size = UDim2.new(1, 0, 0, h), BackgroundTransparency = 1, LayoutOrder = self:_order() })
@@ -1191,6 +1275,7 @@ function SectionMT:AddToggle(flag, opts)
         Parent = row, Size = UDim2.new(1, -48, 1, 0), Text = opts.Text or flag, TextColor3 = labelColor or T.SubText, TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
     })
+    self:_need(textW(opts.Text or flag) + 52)
     local switch = New("Frame", {
         Parent = row, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(36, 18), BackgroundColor3 = T.Element,
     })
@@ -1266,6 +1351,7 @@ function SectionMT:AddSlider(flag, opts)
         Parent = row, Size = UDim2.new(1, -(clusterW + 6), 0, 16), Text = opts.Text or flag, TextColor3 = T.SubText,
         TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
     })
+    self:_need(textW(opts.Text or flag) + clusterW + 12)
     -- value box: click it to type an exact value
     local valueLabel = New("TextBox", {
         Parent = row, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, boxX, 0, 0), Size = UDim2.fromOffset(boxW, 16),
@@ -1527,7 +1613,8 @@ function SectionMT:AddColorPicker(flag, opts)
     local row = self:_row(24)
     row.ClipsDescendants = true
     local head = New("Frame", { Parent = row, Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1 })
-    New("TextLabel", { Parent = head, Size = UDim2.new(1, -50, 1, 0), Text = opts.Text or flag, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left })
+    New("TextLabel", { Parent = head, Size = UDim2.new(1, -50, 1, 0), Text = opts.Text or flag, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd })
+    self:_need(textW(opts.Text or flag) + 56)
     local swatch = New("Frame", {
         Parent = head, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0),
         Size = UDim2.fromOffset(38, 18), BackgroundColor3 = obj.Value,
@@ -1698,7 +1785,8 @@ function SectionMT:AddKeybind(flag, opts)
     obj.MasterOn = masterOn
 
     local row = self:_row(24)
-    New("TextLabel", { Parent = row, Size = UDim2.new(1, -90, 1, 0), Text = text, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left })
+    New("TextLabel", { Parent = row, Size = UDim2.new(1, -90, 1, 0), Text = text, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd })
+    self:_need(textW(text) + 96)
     local btn = New("TextButton", {
         Parent = row, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(0, 22),
         AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = T.Element, Text = "", TextSize = 12,
@@ -1968,7 +2056,7 @@ function WindowMT:_buildSettings()
     local menu = tab:AddSection("Menu", "Left")
     menu:AddToggle("UI_Watermark", { Text = "Show Watermark", Default = true, Callback = function(v) lib:SetWatermarkVisible(v) end })
     menu:AddToggle("UI_KeybindList", { Text = "Show Keybind List", Default = not lib.Mobile, Callback = function(v) lib:SetKeybindListVisible(v) end })
-    menu:AddToggle("UI_Mobile", { Text = "Mobile Mode", Default = lib.Mobile, Callback = function(v) lib:SetMobile(v) end })
+    menu:AddToggle("UI_Mobile", { Text = "Mobile Mode", Default = lib.Mobile, Callback = function(v) lib._autoMobile = false; lib:SetMobile(v) end })
     menu:AddToggle("UI_ToggleBtn", { Text = "Show Menu Button", Default = lib._showToggleBtn, Callback = function(v) lib:SetToggleButtonVisible(v) end })
     menu:AddKeybind("UI_MenuKey", {
         Text = "Menu Keybind", Default = lib.ToggleKey, Passive = true, NoList = true,
