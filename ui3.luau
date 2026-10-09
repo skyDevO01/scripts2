@@ -1790,7 +1790,13 @@ function SectionMT:AddKeybind(flag, opts)
             obj:SetKey(k)
             return
         end
-        if gp or opts.Passive or not obj.Key then return end
+        if opts.Passive or not obj.Key then return end
+        -- Games often bind MB2 / keys through ContextActionService (scoop, aim, etc.), which marks the
+        -- input as "game processed". Only block when the player is typing in a text box, unless
+        -- opts.RespectGameProcessed = true restores the old behaviour.
+        if gp then
+            if opts.RespectGameProcessed or UIS:GetFocusedTextBox() then return end
+        end
         if not masterOn() then return end
         if input.KeyCode == obj.Key or input.UserInputType == obj.Key then
             if obj.Mode == "Toggle" then obj:SetState(not obj.State)
@@ -1800,6 +1806,15 @@ function SectionMT:AddKeybind(flag, opts)
     Library:Connect(UIS.InputEnded, function(input)
         if opts.Passive or not obj.Key or obj.Mode ~= "Hold" then return end
         if input.KeyCode == obj.Key or input.UserInputType == obj.Key then obj:SetState(false) end
+    end)
+    -- safety net for Hold on mouse buttons: if a game swallows the release event, release anyway
+    Library:Connect(RunService.Heartbeat, function()
+        if obj.Mode == "Hold" and obj.State and not opts.Passive
+            and (obj.Key == Enum.UserInputType.MouseButton1 or obj.Key == Enum.UserInputType.MouseButton2
+                or obj.Key == Enum.UserInputType.MouseButton3)
+            and not UIS:IsMouseButtonPressed(obj.Key) then
+            obj:SetState(false)
+        end
     end)
 
     local function onMaster()
