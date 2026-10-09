@@ -1237,11 +1237,22 @@ function SectionMT:AddSlider(flag, opts)
     local obj = { Type = "Slider", Value = min }
     register(obj, flag, opts)
     local row = self:_row(40)
-    New("TextLabel", { Parent = row, Size = UDim2.new(1, -70, 0, 16), Text = opts.Text or flag, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left })
+    local step = tonumber(opts.Step) or (1 / 10 ^ rounding) -- amount changed by the - / + buttons
+    -- make sure the display/rounding precision can represent the step (e.g. Step = 0.1 needs 1 decimal)
+    do
+        local sd = 0
+        while sd < 6 and math.abs(step * 10 ^ sd - math.floor(step * 10 ^ sd + 0.5)) > 1e-6 do sd += 1 end
+        if sd > rounding then rounding = sd end
+    end
+    local showButtons = opts.Buttons ~= false
+    New("TextLabel", { Parent = row, Size = UDim2.new(1, showButtons and -96 or -70, 0, 16), Text = opts.Text or flag, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left })
     local valueLabel = New("TextLabel", {
-        Parent = row, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(70, 16),
-        Text = "", TextXAlignment = Enum.TextXAlignment.Right,
+        Parent = row, AnchorPoint = Vector2.new(1, 0),
+        Position = showButtons and UDim2.new(1, -20, 0, 0) or UDim2.new(1, 0, 0, 0),
+        Size = showButtons and UDim2.fromOffset(52, 16) or UDim2.fromOffset(70, 16),
+        Text = "", TextXAlignment = showButtons and Enum.TextXAlignment.Center or Enum.TextXAlignment.Right,
     })
+    local minusBtn, plusBtn
     local bar = New("Frame", { Parent = row, Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = T.Element })
     Corner(bar, 4); Stroke(bar, T.Outline)
     local fill = New("Frame", { Parent = bar, Size = UDim2.fromScale(0, 1) })
@@ -1295,6 +1306,38 @@ function SectionMT:AddSlider(flag, opts)
             Tween(knob, { Size = UDim2.fromOffset(12, 12) }, 0.12)
         end
     end)
+    -- - / + buttons: change the value by `Step` (hold to repeat)
+    if showButtons then
+        local function makeStepBtn(symbol, xOff, dir)
+            local b = New("TextButton", {
+                Parent = row, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, xOff, 0, 0), Size = UDim2.fromOffset(16, 16),
+                BackgroundTransparency = 0, BackgroundColor3 = T.Element, Text = symbol, TextSize = 14, TextColor3 = T.SubText, ZIndex = 3,
+            })
+            Corner(b, 4); Stroke(b, T.Outline)
+            b.MouseEnter:Connect(function() Tween(b, { BackgroundColor3 = T.ElementHover, TextColor3 = T.Text }, 0.15) end)
+            b.MouseLeave:Connect(function() Tween(b, { BackgroundColor3 = T.Element, TextColor3 = T.SubText }, 0.15) end)
+            local holdId = 0
+            b.InputBegan:Connect(function(i)
+                if not isPress(i) then return end
+                holdId += 1
+                local id = holdId
+                obj:SetValue(obj.Value + step * dir)
+                task.spawn(function()
+                    task.wait(0.4)
+                    while holdId == id and not Library.Unloaded do
+                        obj:SetValue(obj.Value + step * dir)
+                        task.wait(0.06)
+                    end
+                end)
+            end)
+            b.InputEnded:Connect(function(i) if isPress(i) then holdId += 1 end end)
+            b.MouseLeave:Connect(function() holdId += 1 end)
+            return b
+        end
+        plusBtn = makeStepBtn("+", 0, 1)
+        minusBtn = makeStepBtn("-", -72, -1)
+    end
+
     obj:SetValue(opts.Default or min, true)
     return obj
 end
