@@ -1189,6 +1189,7 @@ function SectionMT:AddToggle(flag, opts)
     local row = self:_row(24)
     local label = New("TextLabel", {
         Parent = row, Size = UDim2.new(1, -48, 1, 0), Text = opts.Text or flag, TextColor3 = labelColor or T.SubText, TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
     })
     local switch = New("Frame", {
         Parent = row, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(36, 18), BackgroundColor3 = T.Element,
@@ -1245,13 +1246,34 @@ function SectionMT:AddSlider(flag, opts)
         if sd > rounding then rounding = sd end
     end
     local showButtons = opts.Buttons ~= false
-    New("TextLabel", { Parent = row, Size = UDim2.new(1, showButtons and -96 or -70, 0, 16), Text = opts.Text or flag, TextColor3 = T.SubText, TextXAlignment = Enum.TextXAlignment.Left })
-    local valueLabel = New("TextLabel", {
-        Parent = row, AnchorPoint = Vector2.new(1, 0),
-        Position = showButtons and UDim2.new(1, -20, 0, 0) or UDim2.new(1, 0, 0, 0),
-        Size = showButtons and UDim2.fromOffset(52, 16) or UDim2.fromOffset(70, 16),
-        Text = "", TextXAlignment = showButtons and Enum.TextXAlignment.Center or Enum.TextXAlignment.Right,
+    local function fmt(v)
+        local s = rounding > 0 and string.format("%." .. rounding .. "f", v) or tostring(math.floor(v + 0.5))
+        return s .. (opts.Suffix or "")
+    end
+    -- size the value box to fit the widest text it can show (so long suffixes never overlap the label / buttons)
+    local boxW = 44
+    do
+        local ok, w1 = pcall(function() return TextService:GetTextSize(fmt(min), 13, Enum.Font.GothamMedium, Vector2.new(1000, 100)).X end)
+        local ok2, w2 = pcall(function() return TextService:GetTextSize(fmt(max), 13, Enum.Font.GothamMedium, Vector2.new(1000, 100)).X end)
+        local w = math.max(ok and w1 or 0, ok2 and w2 or 0)
+        if w == 0 then w = 8 * #(fmt(max)) end
+        boxW = math.clamp(math.ceil(w) + 14, 44, 130)
+    end
+    local boxX = showButtons and -18 or 0                    -- right offset of the value box
+    local minusX = -(boxW + 20)                              -- right offset of the "-" button
+    local clusterW = showButtons and (boxW + 36) or boxW     -- total width taken on the right
+    local titleLabel = New("TextLabel", {
+        Parent = row, Size = UDim2.new(1, -(clusterW + 6), 0, 16), Text = opts.Text or flag, TextColor3 = T.SubText,
+        TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
     })
+    -- value box: click it to type an exact value
+    local valueLabel = New("TextBox", {
+        Parent = row, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, boxX, 0, 0), Size = UDim2.fromOffset(boxW, 16),
+        BackgroundColor3 = T.Element, Text = "", ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Center,
+        TextSize = 12, TextColor3 = T.Text, PlaceholderText = "", ZIndex = 3, ClipsDescendants = true,
+    })
+    Corner(valueLabel, 4)
+    local valueStroke = Stroke(valueLabel, T.Outline)
     local minusBtn, plusBtn
     local bar = New("Frame", { Parent = row, Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = T.Element })
     Corner(bar, 4); Stroke(bar, T.Outline)
@@ -1264,10 +1286,6 @@ function SectionMT:AddSlider(flag, opts)
     Corner(knob, 8)
     local hit = New("TextButton", { Parent = row, Position = UDim2.new(0, 0, 0, 18), Size = UDim2.new(1, 0, 0, 24), ZIndex = 3 })
 
-    local function fmt(v)
-        local s = rounding > 0 and string.format("%." .. rounding .. "f", v) or tostring(math.floor(v + 0.5))
-        return s .. (opts.Suffix or "")
-    end
     function obj:SetValue(v, silent)
         v = math.clamp(tonumber(v) or min, min, max)
         local m = 10 ^ rounding
@@ -1275,7 +1293,7 @@ function SectionMT:AddSlider(flag, opts)
         local changed = v ~= self.Value
         self.Value = v
         Library.Flags[flag] = v
-        valueLabel.Text = fmt(v)
+        if not valueLabel:IsFocused() then valueLabel.Text = fmt(v) end
         local a = (max - min) == 0 and 0 or (v - min) / (max - min)
         Tween(fill, { Size = UDim2.fromScale(a, 1) }, 0.1, Enum.EasingStyle.Quad)
         if changed and not silent then Fire(self) end
@@ -1306,6 +1324,25 @@ function SectionMT:AddSlider(flag, opts)
             Tween(knob, { Size = UDim2.fromOffset(12, 12) }, 0.12)
         end
     end)
+    -- typing an exact value into the value box
+    valueLabel.Focused:Connect(function()
+        Tween(valueStroke, { Color = Library.Theme.Accent }, 0.15)
+        valueLabel.Text = tostring(obj.Value) -- plain number while editing (no suffix)
+        task.defer(function()
+            if valueLabel:IsFocused() then
+                valueLabel.CursorPosition = #valueLabel.Text + 1
+                valueLabel.SelectionStart = 1 -- select everything
+            end
+        end)
+    end)
+    valueLabel.FocusLost:Connect(function()
+        Tween(valueStroke, { Color = T.Outline }, 0.15)
+        local txt = valueLabel.Text
+        local n = tonumber(txt) or tonumber(txt:match("-?%d+%.?%d*"))
+        if n then obj:SetValue(n) end -- clamped to Min / Max and rounded
+        valueLabel.Text = fmt(obj.Value)
+    end)
+
     -- - / + buttons: change the value by `Step` (hold to repeat)
     if showButtons then
         local function makeStepBtn(symbol, xOff, dir)
@@ -1335,7 +1372,7 @@ function SectionMT:AddSlider(flag, opts)
             return b
         end
         plusBtn = makeStepBtn("+", 0, 1)
-        minusBtn = makeStepBtn("-", -72, -1)
+        minusBtn = makeStepBtn("-", minusX, -1)
     end
 
     obj:SetValue(opts.Default or min, true)
