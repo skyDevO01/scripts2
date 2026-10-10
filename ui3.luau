@@ -49,7 +49,7 @@ local Library = {
     AllowUnsafe = false,
     PanelTransparency = 0.2,
     ThemeName = "Default",
-    DefaultBackground = "https://i.pinimg.com/736x/06/a1/39/06a139f637935c7e6baa69059d895460.jpg",
+    DefaultBackground = "",
 }
 
 local SectionMT, TabMT, WindowMT = {}, {}, {}
